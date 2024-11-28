@@ -22,18 +22,18 @@ setup() {
 
 @test "do_print_variable | Prints the value of the highest priority variable" {
   local VAR='value0'
-  local PREFIX_VAR='value1'
-  local VAR_SUFFIX='value2'
+  local VAR_SUFFIX='value1'
+  local PREFIX_VAR='value2'
   local PREFIX_VAR_SUFFIX='value3'
   run do_print_variable 'VAR'
   [ "$status" -eq 0 ]
   [ "$output" == "${VAR}" ]
-  run do_print_variable 'PREFIX_' 'VAR'
-  [ "$status" -eq 0 ]
-  [ "$output" == "${PREFIX_VAR}" ]
   run do_print_variable 'VAR' '_SUFFIX'
   [ "$status" -eq 0 ]
   [ "$output" == "${VAR_SUFFIX}" ]
+  run do_print_variable 'PREFIX_' 'VAR'
+  [ "$status" -eq 0 ]
+  [ "$output" == "${PREFIX_VAR}" ]
   run do_print_variable 'PREFIX_' 'VAR' '_SUFFIX'
   [ "$status" -eq 0 ]
   [ "$output" == "${PREFIX_VAR_SUFFIX}" ]
