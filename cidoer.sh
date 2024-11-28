@@ -17,3 +17,21 @@ define_util_core() {
     printf '\n'
   }
 }
+
+define_util_print() {
+  do_print_variable() {
+    local prefix="$1"
+    local name="${2:-${1:?Variable name is required}}"
+    local suffix="$3"
+    local candidates=(
+      "${prefix}${name}${suffix}" "${prefix}${name}" "${name}${suffix}" "${name}"
+    )
+    local value=''
+    local candidate=''
+    for candidate in "${candidates[@]}"; do
+      value="${!candidate}"
+      if [[ -n $value ]]; then break; fi
+    done
+    printf '%s' "$(echo "$value" | sed -e 's/^[[:space:]]*//;s/[[:space:]]*$//')"
+  }
+}
