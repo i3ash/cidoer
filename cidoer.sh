@@ -35,9 +35,10 @@ define_util_print() {
     local trimmed="${value#"${value%%[![:space:]]*}"}"
     printf '%s' "${trimmed%"${trimmed##*[![:space:]]}"}"
   }
-  do_print_trace() { do_print_colorful blue "${@}"; }
-  do_print_info() { do_print_colorful cyan "${@}"; }
-  do_print_warn() { do_print_colorful yellow "${@}"; }
+  do_print_trace() { printf "%s\n" "$(_print_colorful blue "${@}")"; }
+  do_print_info() { printf "%s\n" "$(_print_colorful cyan "${@}")"; }
+  do_print_warn() { printf "%s\n" "$(_print_colorful yellow "${@}")"; }
+  do_print_colorful() { printf "%s\n" "$(_print_colorful "${@}")"; }
   do_print_debug() {
     local _enabled="${OPTION_DEBUG:-no}"
     if [ "$_enabled" != "yes" ]; then return 0; fi
@@ -54,7 +55,7 @@ define_util_print() {
     if [ "$#" -le 0 ]; then return 0; fi
     local _stack=''
     _stack="$(do_stack_trace)"
-    do_print_colorful magenta "#---|---------------------" "${_stack}"
+    printf "%s\n" "$(_print_colorful magenta '#---|--------------------' "${_stack}")"
     if command -v bat >/dev/null 2>&1; then
       shift
       local code_block="$*"
@@ -65,21 +66,14 @@ define_util_print() {
       local i=1
       for arg in "$@"; do
         while IFS= read -r line; do
-          do_print_colorful magenta "$(printf "#%3d|" "$i")" "$line"
+          printf "%s\n" "$(_print_colorful magenta "$(printf '#%3d|' "$i")" "$line")"
           i=$((i + 1))
         done <<<"$arg"
       done
     fi
-    do_print_colorful magenta "#---|--------------------" "${_stack}"
+    printf "%s\n" "$(_print_colorful magenta '#---|--------------------' "${_stack}")"
   }
-  if command -v tput >/dev/null 2>&1; then
-    if tput colors &>/dev/null && [ "$(tput colors)" -ge 256 ]; then
-      export TERM=xterm-256color
-    else
-      export TERM=xterm
-    fi
-  fi
-  do_print_colorful() {
+  _print_colorful() {
     if [ "$#" -le 0 ]; then return 0; fi
     if command -v tput >/dev/null 2>&1; then
       set +e
@@ -97,12 +91,19 @@ define_util_print() {
       done
       local messages=("${args[@]:$i}")
       if [ ${#messages[@]} -eq 0 ]; then return; fi
-      printf "%s\n" "${messages[*]}"
+      printf "%s" "${messages[*]}"
     fi
   }
   _print_colorful_with_tput() {
     if [ "$#" -le 0 ]; then return 0; fi
-    local tp='tput'
+    local tp=''
+    if command -v tput >/dev/null 2>&1; then
+      if tput colors &>/dev/null && [ "$(tput colors)" -ge 256 ]; then
+        tp='tput -T xterm-256color'
+      else
+        tp='tput -T xterm'
+      fi
+    fi
     local color=''
     local args=("$@")
     local i=0
@@ -136,6 +137,6 @@ define_util_print() {
     done
     local messages=("${args[@]:$i}")
     if [ ${#messages[@]} -eq 0 ]; then return; fi
-    printf "%s\n" "${color}${messages[*]}$($tp sgr0)"
+    printf "%s" "${color}${messages[*]}$($tp sgr0)"
   }
 }
