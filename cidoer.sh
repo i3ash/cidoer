@@ -39,6 +39,11 @@ define_util_print() {
   do_print_info() { printf "%s\n" "$(_print_colorful cyan "${@}")"; }
   do_print_warn() { printf "%s\n" "$(_print_colorful yellow "${@}")"; }
   do_print_colorful() { printf "%s\n" "$(_print_colorful "${@}")"; }
+  do_print_os_env() {
+    printenv | while IFS='=' read -r key value; do
+      do_print_dash_pair "$key" "$value"
+    done
+  }
   do_print_dash_pair() {
     local dashes='------------------------------------'
     if [ ${#} -gt 1 ]; then
@@ -71,6 +76,7 @@ define_util_print() {
     if [ "$_enabled" != "yes" ]; then return 0; fi
     do_print_code_lines "$@" >&2
   }
+  do_print_code_bash_fn() { do_print_code_bash "$(declare -f "$@")"; }
   do_print_code_bash() {
     if command -v bat >/dev/null 2>&1; then
       do_print_code_lines 'bash' "$@"
