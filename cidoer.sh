@@ -39,6 +39,20 @@ define_util_print() {
   do_print_info() { printf "%s\n" "$(_print_colorful cyan "${@}")"; }
   do_print_warn() { printf "%s\n" "$(_print_colorful yellow "${@}")"; }
   do_print_colorful() { printf "%s\n" "$(_print_colorful "${@}")"; }
+  do_print_dash_pair() {
+    local dashes='------------------------------------'
+    if [ ${#} -gt 1 ]; then
+      local key
+      local val
+      key=${1} && val=${2}
+      printf "%s %s [%s]\n" "$(_print_colorful green "${key:?}")" \
+        "$(_print_colorful white "${dashes:${#key}}")" "$(_print_colorful green "${val}")"
+    elif [ ${#} -gt 0 ]; then
+      printf "%s %s\n" "$(_print_colorful white "${dashes}--")" "$(_print_colorful white "${1}")"
+    else
+      printf "%s\n" "$(_print_colorful white "${dashes}${dashes}")"
+    fi
+  }
   do_print_debug() {
     local _enabled="${OPTION_DEBUG:-no}"
     if [ "$_enabled" != "yes" ]; then return 0; fi
@@ -53,9 +67,9 @@ define_util_print() {
   }
   do_print_code_lines() {
     if [ "$#" -le 0 ]; then return 0; fi
-    local _stack=''
-    _stack="$(do_stack_trace)"
-    printf "%s\n" "$(_print_colorful magenta '#---|--------------------' "${_stack}")"
+    local stack=''
+    stack="$(do_stack_trace)"
+    printf "%s\n" "$(_print_colorful magenta '#---|--------------------' "${stack}")"
     if command -v bat >/dev/null 2>&1; then
       shift
       local code_block="$*"
@@ -71,7 +85,7 @@ define_util_print() {
         done <<<"$arg"
       done
     fi
-    printf "%s\n" "$(_print_colorful magenta '#---|--------------------' "${_stack}")"
+    printf "%s\n" "$(_print_colorful magenta '#---|--------------------' "${stack}")"
   }
   _print_colorful() {
     if [ "$#" -le 0 ]; then return 0; fi
