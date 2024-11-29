@@ -35,23 +35,107 @@ define_util_print() {
     local trimmed="${value#"${value%%[![:space:]]*}"}"
     printf '%s' "${trimmed%"${trimmed##*[![:space:]]}"}"
   }
-  do_print_trace() { do_print_colorful '0;34' "${@}"; }
-  do_print_info() { do_print_colorful '0;36' "${@}"; }
-  do_print_warn() { do_print_colorful '1;33' "${@}"; }
-  do_print_colorful() {
-    if [ $# -lt 2 ]; then return; fi
-    local color_code="\033[${1}m"
-    local reset_code='\033[0m'
-    local trimmed_title="${2#"${2%%[![:space:]]*}"}"
-    trimmed_title="${trimmed_title%"${trimmed_title##*[![:space:]]}"}"
-    if [ $# -gt 2 ]; then
-      if [ -z "$trimmed_title" ]; then
-        printf "${color_code}%s${reset_code}\n" "${@:3}"
-      else
-        printf "${color_code}%s${reset_code} %s\n" "$trimmed_title" "${@:3}"
-      fi
+  do_print_trace() { do_print_colorful blue "${@}"; }
+  do_print_info() { do_print_colorful cyan "${@}"; }
+  do_print_warn() { do_print_colorful yellow "${@}"; }
+  do_print_debug() {
+    local _enabled="${OPTION_DEBUG:-no}"
+    if [ "$_enabled" != "yes" ]; then return 0; fi
+    do_print_code_lines "$@" >&2
+  }
+  do_print_code_bash() {
+    if command -v bat >/dev/null 2>&1; then
+      do_print_code_lines 'bash' "$@"
     else
-      printf "${color_code}%s${reset_code}\n" "$trimmed_title"
+      do_print_code_lines "$@"
     fi
+  }
+  do_print_code_lines() {
+    if [ "$#" -le 0 ]; then return 0; fi
+    local _stack=''
+    _stack="$(do_stack_trace)"
+    do_print_colorful magenta "#---|---------------------" "${_stack}"
+    if command -v bat >/dev/null 2>&1; then
+      shift
+      local code_block="$*"
+      bat --language sh --paging never --number <<<"${code_block}"
+    else
+      local arg
+      local line
+      local i=1
+      for arg in "$@"; do
+        while IFS= read -r line; do
+          do_print_colorful magenta "$(printf "#%3d|" "$i")" "$line"
+          i=$((i + 1))
+        done <<<"$arg"
+      done
+    fi
+    do_print_colorful magenta "#---|--------------------" "${_stack}"
+  }
+  if command -v tput >/dev/null 2>&1; then
+    if tput colors &>/dev/null && [ "$(tput colors)" -ge 256 ]; then
+      export TERM=xterm-256color
+    else
+      export TERM=xterm
+    fi
+  fi
+  do_print_colorful() {
+    if [ "$#" -le 0 ]; then return 0; fi
+    if command -v tput >/dev/null 2>&1; then
+      set +e
+      _print_colorful_with_tput "$@"
+      set -e
+    else
+      local args=("$@")
+      local i=0
+      while [[ $i -lt ${#args[@]} ]]; do
+        case "${args[$i]}" in bold | dim | underline | blink | reverse | hidden | \
+          black | red | green | yellow | blue | magenta | cyan | white | \
+          on_black | on_red | on_green | on_yellow | on_blue | on_magenta | on_cyan | on_white) ((i++)) ;;
+        *) break ;;
+        esac
+      done
+      local messages=("${args[@]:$i}")
+      if [ ${#messages[@]} -eq 0 ]; then return; fi
+      printf "%s\n" "${messages[*]}"
+    fi
+  }
+  _print_colorful_with_tput() {
+    if [ "$#" -le 0 ]; then return 0; fi
+    local tp='tput'
+    local color=''
+    local args=("$@")
+    local i=0
+    while [[ $i -lt ${#args[@]} ]]; do
+      case "${args[$i]}" in
+      bold) color+=$($tp bold) ;;
+      dim) color+=$($tp dim) ;;
+      underline) color+=$($tp smul) ;;
+      blink) color+=$($tp blink) ;;
+      reverse) color+=$($tp rev) ;;
+      hidden) color+=$($tp invis) ;;
+      black) color+=$($tp setaf 0) ;;
+      red) color+=$($tp setaf 1) ;;
+      green) color+=$($tp setaf 2) ;;
+      yellow) color+=$($tp setaf 3) ;;
+      blue) color+=$($tp setaf 4) ;;
+      magenta) color+=$($tp setaf 5) ;;
+      cyan) color+=$($tp setaf 6) ;;
+      white) color+=$($tp setaf 7) ;;
+      on_black) color+=$($tp setab 0) ;;
+      on_red) color+=$($tp setab 1) ;;
+      on_green) color+=$($tp setab 2) ;;
+      on_yellow) color+=$($tp setab 3) ;;
+      on_blue) color+=$($tp setab 4) ;;
+      on_magenta) color+=$($tp setab 5) ;;
+      on_cyan) color+=$($tp setab 6) ;;
+      on_white) color+=$($tp setab 7) ;;
+      *) break ;;
+      esac
+      ((i++))
+    done
+    local messages=("${args[@]:$i}")
+    if [ ${#messages[@]} -eq 0 ]; then return; fi
+    printf "%s\n" "${color}${messages[*]}$($tp sgr0)"
   }
 }
