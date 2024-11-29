@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2317
-set -eo pipefail
+set -eou pipefail
 
 define_util_core() {
   do_nothing() { :; }
@@ -28,10 +28,12 @@ define_util_print() {
     )
     local value=''
     local candidate=''
+    set +u
     for candidate in "${candidates[@]}"; do
       value="${!candidate}"
       if [[ -n $value ]]; then break; fi
     done
+    set -u
     local trimmed="${value#"${value%%[![:space:]]*}"}"
     printf '%s' "${trimmed%"${trimmed##*[![:space:]]}"}"
   }
