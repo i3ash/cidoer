@@ -16,10 +16,10 @@ do_print_warn "do_print_warn"
 do_print_colorful blue "do_print_colorful blue"
 do_print_colorful magenta "do_print_code_bash"
 do_print_code_bash "$(declare -f do_print_code_bash)"
-do_print_dash_pair 'Environment Variables'
+do_print_section 'do_print_section'
+do_print_dash_pair 'do_print_dash_pair'
 printenv | while IFS='=' read -r key value; do
   do_print_dash_pair "$key" "$value"
 done
 do_print_dash_pair
-
-echo '----------' "$(date)"
+do_print_section

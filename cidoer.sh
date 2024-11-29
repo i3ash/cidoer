@@ -53,6 +53,19 @@ define_util_print() {
       printf "%s\n" "$(_print_colorful white "${dashes}${dashes}")"
     fi
   }
+  do_print_section() {
+    local line='==============================================================================='
+    if [ ${#} -le 0 ]; then
+      printf "%s\n" "$(_print_colorful cyan "=${line} $(date +'%Y-%m-%d %T %Z')")"
+      return
+    fi
+    local title="${*}"
+    local trimmed="${title#"${title%%[![:space:]]*}"}"
+    trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+    if [ -n "${trimmed}" ]; then
+      printf "%s\n" "$(_print_colorful cyan "${trimmed} ${line:${#trimmed}} $(date +'%Y-%m-%d %T %Z')")"
+    fi
+  }
   do_print_debug() {
     local _enabled="${OPTION_DEBUG:-no}"
     if [ "$_enabled" != "yes" ]; then return 0; fi
