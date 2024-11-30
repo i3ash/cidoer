@@ -37,14 +37,16 @@ define_util_print() {
     local trimmed="${value#"${value%%[![:space:]]*}"}"
     printf '%s' "${trimmed%"${trimmed##*[![:space:]]}"}"
   }
-  do_print_trace() { printf "%s\n" "$(_print_colorful blue "${@}")"; }
-  do_print_info() { printf "%s\n" "$(_print_colorful cyan "${@}")"; }
-  do_print_warn() { printf "%s\n" "$(_print_colorful yellow "${@}")"; }
-  do_print_colorful() { printf "%s\n" "$(_print_colorful "${@}")"; }
+  do_print_trace() { printf "%s\n" "$(do_tint blue "${@}")"; }
+  do_print_info() { printf "%s\n" "$(do_tint cyan "${@}")"; }
+  do_print_warn() { printf "%s\n" "$(do_tint yellow "${@}")"; }
+  do_print_colorful() { printf "%s\n" "$(do_tint "${@}")"; }
   do_print_os_env() {
-    printenv | while IFS='=' read -r key value; do
+    local key
+    local value
+    while IFS='=' read -r key value; do
       do_print_dash_pair "$key" "$value"
-    done
+    done < <(printenv)
   }
   do_print_dash_pair() {
     local dashes='------------------------------------'
@@ -52,29 +54,29 @@ define_util_print() {
       local key
       local val
       key=${1} && val=${2}
-      printf "%s %s [%s]\n" "$(_print_colorful green "${key:?}")" \
-        "$(_print_colorful white "${dashes:${#key}}")" "$(_print_colorful green "${val}")"
+      printf "%s %s [%s]\n" "$(do_tint green "${key:?}")" \
+        "$(do_tint white "${dashes:${#key}}")" "$(do_tint green "${val}")"
     elif [ ${#} -gt 0 ]; then
-      printf "%s %s\n" "$(_print_colorful white "${dashes}--")" "$(_print_colorful white "${1}")"
+      printf "%s %s\n" "$(do_tint white "${dashes}--")" "$(do_tint white "${1}")"
     else
-      printf "%s\n" "$(_print_colorful white "${dashes}${dashes}")"
+      printf "%s\n" "$(do_tint white "${dashes}${dashes}")"
     fi
   }
   do_print_section() {
     local line='==============================================================================='
     if [ ${#} -le 0 ]; then
-      printf "%s\n" "$(_print_colorful cyan "=${line} $(date +'%Y-%m-%d %T %Z')")"
+      printf "%s\n" "$(do_tint cyan "=${line} $(date +'%Y-%m-%d %T %Z')")"
       return
     fi
     local title="${*}"
     local trimmed="${title#"${title%%[![:space:]]*}"}"
     trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
     if [ -n "${trimmed}" ]; then
-      printf "%s\n" "$(_print_colorful cyan "${trimmed} ${line:${#trimmed}} $(date +'%Y-%m-%d %T %Z')")"
+      printf "%s\n" "$(do_tint cyan "${trimmed} ${line:${#trimmed}} $(date +'%Y-%m-%d %T %Z')")"
     fi
   }
   do_print_debug() {
-    local _enabled="${OPTION_DEBUG:-no}"
+    local _enabled="${CIDOER_DEBUG:-no}"
     if [ "$_enabled" != "yes" ]; then return 0; fi
     do_print_code_lines "$@" >&2
   }
@@ -90,7 +92,7 @@ define_util_print() {
     if [ "$#" -le 0 ]; then return 0; fi
     local stack=''
     stack="$(do_stack_trace)"
-    printf "%s\n" "$(_print_colorful magenta '#---|--------------------' "${stack}")"
+    printf "%s\n" "$(do_tint magenta '#---|--------------------' "${stack}")"
     if command -v bat >/dev/null 2>&1; then
       shift
       local code_block="$*"
@@ -101,77 +103,86 @@ define_util_print() {
       local i=1
       for arg in "$@"; do
         while IFS= read -r line; do
-          printf "%s\n" "$(_print_colorful magenta "$(printf '#%3d|' "$i")" "$line")"
+          printf "%s\n" "$(do_tint magenta "$(printf '#%3d|' "$i")" "$line")"
           i=$((i + 1))
         done <<<"$arg"
       done
     fi
-    printf "%s\n" "$(_print_colorful magenta '#---|--------------------' "${stack}")"
+    printf "%s\n" "$(do_tint magenta '#---|--------------------' "${stack}")"
   }
-  _print_colorful() {
+  do_tint() {
     if [ "$#" -le 0 ]; then return 0; fi
-    if command -v tput >/dev/null 2>&1; then
-      set +e
-      _print_colorful_with_tput "$@"
-      set -e
-    else
-      local args=("$@")
-      local i=0
-      while [[ $i -lt ${#args[@]} ]]; do
-        case "${args[$i]}" in bold | dim | underline | blink | reverse | hidden | \
-          black | red | green | yellow | blue | magenta | cyan | white | \
-          on_black | on_red | on_green | on_yellow | on_blue | on_magenta | on_cyan | on_white) ((i++)) ;;
-        *) break ;;
-        esac
-      done
-      local messages=("${args[@]:$i}")
-      if [ ${#messages[@]} -eq 0 ]; then return; fi
-      printf "%s" "${messages[*]}"
-    fi
-  }
-  _print_colorful_with_tput() {
-    if [ "$#" -le 0 ]; then return 0; fi
-    local tp=''
-    if command -v tput >/dev/null 2>&1; then
-      if tput colors &>/dev/null && [ "$(tput colors)" -ge 256 ]; then
-        tp='tput -T xterm-256color'
-      else
-        tp='tput -T xterm'
-      fi
-    fi
-    local color=''
     local args=("$@")
+    local styles_clear="${_CIDOER_TPUT_COLORS_CLEAR:=$(do_lookup_color reset)}"
+    local styles=''
+    local code
     local i=0
     while [[ $i -lt ${#args[@]} ]]; do
-      case "${args[$i]}" in
-      bold) color+=$($tp bold) ;;
-      dim) color+=$($tp dim) ;;
-      underline) color+=$($tp smul) ;;
-      blink) color+=$($tp blink) ;;
-      reverse) color+=$($tp rev) ;;
-      hidden) color+=$($tp invis) ;;
-      black) color+=$($tp setaf 0) ;;
-      red) color+=$($tp setaf 1) ;;
-      green) color+=$($tp setaf 2) ;;
-      yellow) color+=$($tp setaf 3) ;;
-      blue) color+=$($tp setaf 4) ;;
-      magenta) color+=$($tp setaf 5) ;;
-      cyan) color+=$($tp setaf 6) ;;
-      white) color+=$($tp setaf 7) ;;
-      on_black) color+=$($tp setab 0) ;;
-      on_red) color+=$($tp setab 1) ;;
-      on_green) color+=$($tp setab 2) ;;
-      on_yellow) color+=$($tp setab 3) ;;
-      on_blue) color+=$($tp setab 4) ;;
-      on_magenta) color+=$($tp setab 5) ;;
-      on_cyan) color+=$($tp setab 6) ;;
-      on_white) color+=$($tp setab 7) ;;
+      case "${args[$i]}" in bold | dim | underline | blink | reverse | hidden | \
+        black | red | green | yellow | blue | magenta | cyan | white | \
+        on_black | on_red | on_green | on_yellow | on_blue | on_magenta | on_cyan | on_white)
+        if command -v tput >/dev/null 2>&1; then
+          code=$(do_lookup_color "${args[$i]}")
+          if [[ -n $code ]]; then styles+="$code"; fi
+        fi
+        ((i++))
+        ;;
       *) break ;;
       esac
-      ((i++))
     done
     local messages=("${args[@]:$i}")
     if [ ${#messages[@]} -eq 0 ]; then return; fi
-    printf "%s" "${color}${messages[*]}$($tp sgr0)"
+    printf '%s%s%s' "$styles" "${messages[*]}" "$styles_clear"
   }
+  do_reset_tput() {
+    if command -v tput >/dev/null 2>&1; then
+      local tp_cmd
+      if tput colors &>/dev/null && [ "$(tput colors)" -ge 256 ]; then
+        local tp_cmd='tput -T xterm-256color'
+      else
+        local tp_cmd='tput -T xterm'
+      fi
+      CIDOER_TPUT_COLORS=(
+        "reset=$($tp_cmd sgr0)"
+        "black=$($tp_cmd setaf 0)"
+        "red=$($tp_cmd setaf 1)"
+        "green=$($tp_cmd setaf 2)"
+        "yellow=$($tp_cmd setaf 3)"
+        "blue=$($tp_cmd setaf 4)"
+        "magenta=$($tp_cmd setaf 5)"
+        "cyan=$($tp_cmd setaf 6)"
+        "white=$($tp_cmd setaf 7)"
+        "on_black=$($tp_cmd setab 0)"
+        "on_red=$($tp_cmd setab 1)"
+        "on_green=$($tp_cmd setab 2)"
+        "on_yellow=$($tp_cmd setab 3)"
+        "on_blue=$($tp_cmd setab 4)"
+        "on_magenta=$($tp_cmd setab 5)"
+        "on_cyan=$($tp_cmd setab 6)"
+        "on_white=$($tp_cmd setab 7)"
+        "bold=$($tp_cmd bold)"
+        "dim=$($tp_cmd dim)"
+        "underline=$($tp_cmd smul)"
+        "blink=$($tp_cmd blink)"
+        "reverse=$($tp_cmd rev)"
+        "hidden=$($tp_cmd invis)"
+      )
+      _CIDOER_TPUT_COLORS_CLEAR="$(do_lookup_color reset)"
+    fi
+  }
+  do_lookup_color() {
+    if [ ${#CIDOER_TPUT_COLORS} -le 0 ]; then return 0; fi
+    local key=${1:?Color is required}
+    local color
+    for color in "${CIDOER_TPUT_COLORS[@]}"; do
+      if [[ $color == "$key="* ]]; then
+        echo "${color#*=}"
+        return 0
+      fi
+    done
+  }
+  do_reset_tput
 }
+declare CIDOER_DEBUG='no'
+declare -a CIDOER_TPUT_COLORS=()
+declare _CIDOER_TPUT_COLORS_CLEAR=''

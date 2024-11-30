@@ -18,3 +18,4 @@ do_print_dash_pair 'do_print_os_env' ''
 do_print_os_env
 do_print_dash_pair
 do_print_section
+bash --version
