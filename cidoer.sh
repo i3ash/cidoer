@@ -1,13 +1,10 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2317
-set -eou pipefail
 
 define_util_core() {
   do_nothing() { :; }
   do_stack_trace() {
-    printf '%s --> ' "${USER:-$(id -un)}@$(
-      cat /proc/sys/kernel/hostname 2>/dev/null || hostname
-    )"
+    printf '%s --> ' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}"
     local fns=("${FUNCNAME[@]:1}")
     local idx
     for ((idx = ${#fns[@]} - 1; idx >= 0; idx--)); do
@@ -16,9 +13,11 @@ define_util_core() {
     done
     printf '\n'
   }
-}
-
-define_util_print() {
+  do_time_now() {
+    if command -v date >/dev/null 2>&1; then
+      printf '%s' "$(date +"%Y-%m-%d %T %Z")"
+    fi
+  }
   do_print_variable() {
     local prefix="$1"
     local name="${2:-${1:?Variable name is required}}"
@@ -40,6 +39,7 @@ define_util_print() {
   do_print_trace() { printf "%s\n" "$(do_tint blue "${@}")"; }
   do_print_info() { printf "%s\n" "$(do_tint cyan "${@}")"; }
   do_print_warn() { printf "%s\n" "$(do_tint yellow "${@}")"; }
+  do_print_error() { printf "%s\n" "$(do_tint bold on_red "${@}")"; }
   do_print_colorful() { printf "%s\n" "$(do_tint "${@}")"; }
   do_print_os_env() {
     local key
@@ -65,14 +65,14 @@ define_util_print() {
   do_print_section() {
     local line='==============================================================================='
     if [ ${#} -le 0 ]; then
-      printf "%s\n" "$(do_tint cyan "=${line} $(date +'%Y-%m-%d %T %Z')")"
+      printf "%s\n" "$(do_tint cyan "=${line} $(do_time_now)")"
       return
     fi
     local title="${*}"
     local trimmed="${title#"${title%%[![:space:]]*}"}"
     trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
     if [ -n "${trimmed}" ]; then
-      printf "%s\n" "$(do_tint cyan "${trimmed} ${line:${#trimmed}} $(date +'%Y-%m-%d %T %Z')")"
+      printf "%s\n" "$(do_tint cyan "${trimmed} ${line:${#trimmed}} $(do_time_now)")"
     fi
   }
   do_print_debug() {
@@ -181,8 +181,46 @@ define_util_print() {
       fi
     done
   }
+  do_check_installed() {
+    local cmd="$1"
+    local cmd_path
+    cmd_path=$(command -v "${cmd:?}" 2>/dev/null)
+    if [ -n "${cmd_path}" ] && [ -x "${cmd_path}" ]; then
+      do_print_dash_pair "${cmd}" "${cmd_path}"
+      return 0
+    fi
+    return 1
+  }
+  do_check_optional_cmd() {
+    do_print_dash_pair 'Optional Commands'
+    local cmd
+    for cmd in "${@}"; do
+      if ! do_check_installed "$cmd"; then
+        do_print_dash_pair "${cmd}" "$(do_tint white missing)"
+      fi
+    done
+  }
+  do_check_required_cmd() {
+    do_print_dash_pair 'Required Commands'
+    local cmd
+    local missing=0
+    for cmd in "${@}"; do
+      if ! do_check_installed "$cmd"; then
+        do_print_dash_pair "${cmd}" "$(do_tint red missing)"
+        missing=1
+      fi
+    done
+    if [ "$missing" -eq 1 ]; then
+      do_print_error "Please install the missing required commands and try again later."
+      exit 1
+    fi
+  }
+  do_check_core_dependencies() {
+    do_check_optional_cmd date tput bat
+    do_check_required_cmd id hostname printenv
+  }
+  set -eou pipefail
   do_reset_tput
 }
 declare CIDOER_DEBUG='no'
 declare -a CIDOER_TPUT_COLORS=()
-declare _CIDOER_TPUT_COLORS_CLEAR=''

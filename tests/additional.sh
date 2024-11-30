@@ -3,9 +3,9 @@ set -eou pipefail
 source ../cidoer.sh
 
 define_util_core
+# without colors
+#CIDOER_TPUT_COLORS=()
 do_stack_trace
-
-define_util_print
 do_print_section 'do_print_section'
 do_print_trace "do_print_trace"
 do_print_info "do_print_info"
@@ -16,6 +16,7 @@ do_print_code_bash_fn 'do_print_code_bash_fn' 'do_print_code_bash' 'do_print_cod
 do_print_dash_pair 'do_print_dash_pair' ''
 do_print_dash_pair 'do_print_os_env' ''
 do_print_os_env
-do_print_dash_pair
 do_print_section
+do_check_core_dependencies
+do_print_dash_pair
 bash --version

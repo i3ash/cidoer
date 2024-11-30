@@ -3,7 +3,7 @@
 load ../cidoer.sh
 
 setup() {
-  define_util_print
+  define_util_core
   set +u
 }
 teardown() {
