@@ -20,10 +20,19 @@ teardown() { :; }
   [ "$output" == '' ]
 }
 
+@test "do_func_invoke | Passes wrong arguments" {
+  run do_func_invoke
+  [[ "$status" == 0 ]]
+  [[ "$output" == *$'$1 (func_name) is required'* ]]
+  run do_func_invoke ''
+  [[ "$status" == 0 ]]
+  [[ "$output" == *$'$1 (func_name) is required'* ]]
+}
+
 @test "do_func_invoke | Handles non-existent function" {
   run do_func_invoke non_existent_function arg1 arg2
   [[ "$status" == 0 ]]
-  [[ "$output" == *"non_existent_function is an absent function"* ]]
+  [[ "$output" == *'non_existent_function is an absent function'* ]]
 }
 
 @test "do_func_invoke | Handles failed function" {

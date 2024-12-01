@@ -18,6 +18,10 @@ define_util_core() {
     if command -v date >/dev/null 2>&1; then printf '%s' "$(date +"%Y-%m-%d %T %Z")"; fi
   }
   do_func_invoke() {
+    if [ "$#" -le 0 ] || [ -z "$1" ]; then
+      do_print_warn "$(do_stack_trace)" $'$1 (func_name) is required' >&2
+      return 0
+    fi
     local func_name="${1}"
     if declare -F "${func_name}" >/dev/null; then
       local exit_code=0
@@ -25,9 +29,7 @@ define_util_core() {
       if [ "${exit_code}" -ne 0 ]; then
         do_print_warn "$(do_stack_trace)" "${func_name} failed with exit code ${exit_code}" >&2
       fi
-    else
-      do_print_trace "$(do_stack_trace)" "${func_name} is an absent function" >&2
-    fi
+    else do_print_trace "$(do_stack_trace)" "${func_name} is an absent function" >&2; fi
   }
   do_print_variable() {
     if [ "$#" -le 0 ]; then return 0; fi
