@@ -3,6 +3,7 @@ set -eou pipefail
 # shellcheck disable=SC2317
 
 define_util_core() {
+  if declare -F 'do_nothing' >/dev/null; then return 0; fi
   do_nothing() { :; }
   do_stack_trace() {
     printf '%s --> ' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}"
@@ -269,5 +270,6 @@ define_util_core() {
   }
   do_reset_tput
 }
+if declare -F 'do_nothing' >/dev/null; then return 0; fi
 declare CIDOER_DEBUG='no'
 declare -a CIDOER_TPUT_COLORS=()
