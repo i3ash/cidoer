@@ -17,6 +17,19 @@ do_print_dash_pair 'do_print_dash_pair' ''
 do_print_dash_pair 'do_print_os_env' ''
 do_print_os_env
 do_print_section
+
 do_check_core_dependencies
 do_print_dash_pair
+do_print_section
+
+do_func_invoke do_lookup_color
+do_func_invoke do_check_installed hello
+do_func_invoke do_check_installed
+do_func_invoke do_check_required_cmd hello whoami
+do_func_invoke do_abc
+do_func_invoke do_func_invoke do_abc
+do_func_invoke do_func_invoke do_func_invoke do_abc
+do_func_invoke do_print_trace 'do_func_invoke do_print_trace'
+do_print_section
+
 bash --version

@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+set -eou pipefail
 # shellcheck disable=SC2317
 
 define_util_core() {
@@ -14,13 +15,26 @@ define_util_core() {
     printf '\n'
   }
   do_time_now() {
-    if command -v date >/dev/null 2>&1; then
-      printf '%s' "$(date +"%Y-%m-%d %T %Z")"
+    if command -v date >/dev/null 2>&1; then printf '%s' "$(date +"%Y-%m-%d %T %Z")"; fi
+  }
+  do_func_invoke() {
+    local func_name="${1}"
+    if declare -F "${func_name}" >/dev/null; then
+      set +e
+      "${@}"
+      local exit_code=$?
+      set -e
+      if [ "${exit_code}" -ne 0 ]; then
+        do_print_warn "$(do_stack_trace)" "${func_name} failed with exit code ${exit_code}" >&2
+      fi
+    else
+      do_print_trace "$(do_stack_trace)" "${func_name} is an absent function" >&2
     fi
   }
   do_print_variable() {
+    if [ "$#" -le 0 ]; then return 0; fi
     local prefix="$1"
-    local name="${2:-${1:?Variable name is required}}"
+    local name="$2"
     local suffix="$3"
     local candidates=(
       "${prefix}${name}${suffix}" "${prefix}${name}" "${name}${suffix}" "${name}"
@@ -30,7 +44,7 @@ define_util_core() {
     set +u
     for candidate in "${candidates[@]}"; do
       value="${!candidate}"
-      if [[ -n $value ]]; then break; fi
+      if [ -n "$value" ]; then break; fi
     done
     set -u
     local trimmed="${value#"${value%%[![:space:]]*}"}"
@@ -51,11 +65,8 @@ define_util_core() {
   do_print_dash_pair() {
     local dashes='------------------------------------'
     if [ ${#} -gt 1 ]; then
-      local key
-      local val
-      key=${1} && val=${2}
-      printf "%s %s [%s]\n" "$(do_tint green "${key:?}")" \
-        "$(do_tint white "${dashes:${#key}}")" "$(do_tint green "${val}")"
+      printf "%s %s [%s]\n" "$(do_tint green "${1}")" \
+        "$(do_tint white "${dashes:${#1}}")" "$(do_tint green "${2}")"
     elif [ ${#} -gt 0 ]; then
       printf "%s < %s >\n" "$(do_tint white "${dashes}-")" "$(do_tint white "${1}")"
     else
@@ -104,7 +115,7 @@ define_util_core() {
       for arg in "$@"; do
         while IFS= read -r line; do
           printf "%s\n" "$(do_tint magenta "$(printf '#%3d|' "$i")" "$line")"
-          i=$((i + 1))
+          ((i++))
         done <<<"$arg"
       done
     fi
@@ -117,13 +128,13 @@ define_util_core() {
     local styles=''
     local code
     local i=0
-    while [[ $i -lt ${#args[@]} ]]; do
+    while [ "$i" -lt "${#args[@]}" ]; do
       case "${args[$i]}" in bold | dim | underline | blink | reverse | hidden | \
         black | red | green | yellow | blue | magenta | cyan | white | \
         on_black | on_red | on_green | on_yellow | on_blue | on_magenta | on_cyan | on_white)
         if command -v tput >/dev/null 2>&1; then
           code=$(do_lookup_color "${args[$i]}")
-          if [[ -n $code ]]; then styles+="$code"; fi
+          if [ -n "$code" ]; then styles+="$code"; fi
         fi
         ((i++))
         ;;
@@ -172,19 +183,33 @@ define_util_core() {
   }
   do_lookup_color() {
     if [ ${#CIDOER_TPUT_COLORS} -le 0 ]; then return 0; fi
-    local key=${1:?Color is required}
+    set +u
+    local key=${1}
+    set -u
+    if [ -z "$key" ]; then
+      printf $'do_lookup_color $1 (color) is required\n' >&2
+      return 1
+    fi
     local color
     for color in "${CIDOER_TPUT_COLORS[@]}"; do
-      if [[ $color == "$key="* ]]; then
-        echo "${color#*=}"
+      case "$color" in
+      "$key="*)
+        printf '%s' "${color#*=}"
         return 0
-      fi
+        ;;
+      esac
     done
   }
   do_check_installed() {
+    set +u
     local cmd="$1"
+    set -u
+    if [ -z "$cmd" ]; then
+      printf $'do_check_installed $1 (cmd) is required\n' >&2
+      return 2
+    fi
     local cmd_path
-    cmd_path=$(command -v "${cmd:?}" 2>/dev/null)
+    cmd_path=$(command -v "${cmd}" 2>/dev/null)
     if [ -n "${cmd_path}" ] && [ -x "${cmd_path}" ]; then
       do_print_dash_pair "${cmd}" "${cmd_path}"
       return 0
@@ -212,14 +237,13 @@ define_util_core() {
     done
     if [ "$missing" -eq 1 ]; then
       do_print_error "Please install the missing required commands and try again later."
-      exit 1
+      return 1
     fi
   }
   do_check_core_dependencies() {
     do_check_optional_cmd date tput bat
     do_check_required_cmd id hostname printenv
   }
-  set -eou pipefail
   do_reset_tput
 }
 declare CIDOER_DEBUG='no'

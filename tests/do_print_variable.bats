@@ -52,8 +52,8 @@ teardown() {
 
 @test "do_print_variable | Exits with an error when name is missing" {
   run do_print_variable
-  [[ "$status" != 0 ]]
-  [[ "$output" == *'Variable name is required'* ]]
+  [ "$status" == 0 ]
+  [ "$output" == '' ]
 }
 
 @test "do_print_variable | Prints an empty string when no variables are set" {
