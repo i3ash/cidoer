@@ -53,7 +53,7 @@ define_util_core() {
   do_print_trace() { printf "%s\n" "$(do_tint blue "${@}")"; }
   do_print_info() { printf "%s\n" "$(do_tint cyan "${@}")"; }
   do_print_warn() { printf "%s\n" "$(do_tint yellow "${@}")"; }
-  do_print_error() { printf "%s\n" "$(do_tint bold on_red "${@}")"; }
+  do_print_error() { printf "%s\n" "$(do_tint bold black on_red "${@}")"; }
   do_print_colorful() { printf "%s\n" "$(do_tint "${@}")"; }
   do_print_os_env() {
     local key
@@ -242,7 +242,30 @@ define_util_core() {
   }
   do_check_core_dependencies() {
     do_check_optional_cmd date tput bat
-    do_check_required_cmd id hostname printenv
+    do_check_required_cmd id hostname printenv diff awk
+  }
+  do_diff() {
+    set +u
+    if [ -z "${1}" ] || [ -z "${2}" ]; then
+      do_print_warn "$(do_stack_trace)" "(${1}, ${2})" $'$1 and $2 are required' >&2
+      set -u
+      return 0
+    fi
+    set -u
+    do_print_trace "$(do_stack_trace)" "${1}" "${2}"
+    diff -U0 "${1}" "${2}" | awk '
+      /^@/ {
+        split($0, parts, " ")
+        split(parts[2], old, ",")
+        split(parts[3], new, ",")
+        old_line = substr(old[1], 2)
+        new_line = substr(new[1], 2)
+        next
+      }
+      /^-/  { printf "\033[0;31m-|%03d| %s\033[0m\n", old_line++, substr($0,2) }
+      /^\+/ { printf "\033[0;32m+|%03d| %s\033[0m\n", new_line++, substr($0,2) }
+    '
+    return "${PIPESTATUS[0]}"
   }
   do_reset_tput
 }

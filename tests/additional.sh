@@ -30,6 +30,7 @@ do_func_invoke do_abc
 do_func_invoke do_func_invoke do_abc
 do_func_invoke do_func_invoke do_func_invoke do_abc
 do_func_invoke do_print_trace 'do_func_invoke do_print_trace'
-do_print_section
-
+do_print_section 'do_func_invoke'
+do_diff '_diff_v1.txt' '_diff_v2.txt' || do_print_info 'do_diff returned' "$?"
+do_print_section 'do_diff'
 bash --version
