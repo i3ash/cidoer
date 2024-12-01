@@ -20,10 +20,8 @@ define_util_core() {
   do_func_invoke() {
     local func_name="${1}"
     if declare -F "${func_name}" >/dev/null; then
-      set +e
-      "${@}"
-      local exit_code=$?
-      set -e
+      local exit_code=0
+      "${@}" || exit_code=$?
       if [ "${exit_code}" -ne 0 ]; then
         do_print_warn "$(do_stack_trace)" "${func_name} failed with exit code ${exit_code}" >&2
       fi
