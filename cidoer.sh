@@ -57,7 +57,7 @@ define_util_core() {
       printf "%s %s [%s]\n" "$(do_tint green "${key:?}")" \
         "$(do_tint white "${dashes:${#key}}")" "$(do_tint green "${val}")"
     elif [ ${#} -gt 0 ]; then
-      printf "%s %s\n" "$(do_tint white "${dashes}--")" "$(do_tint white "${1}")"
+      printf "%s < %s >\n" "$(do_tint white "${dashes}-")" "$(do_tint white "${1}")"
     else
       printf "%s\n" "$(do_tint white "${dashes}${dashes}")"
     fi
@@ -196,7 +196,7 @@ define_util_core() {
     local cmd
     for cmd in "${@}"; do
       if ! do_check_installed "$cmd"; then
-        do_print_dash_pair "${cmd}" "$(do_tint white missing)"
+        do_print_dash_pair "${cmd}" ''
       fi
     done
   }
