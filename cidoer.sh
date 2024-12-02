@@ -34,14 +34,11 @@ define_util_core() {
   }
   do_print_variable() {
     if [ "$#" -le 0 ]; then return 0; fi
-    local prefix="$1"
-    local name="$2"
-    local suffix="$3"
+    local prefix="$1" name="$2" suffix="$3"
     local candidates=(
       "${prefix}${name}${suffix}" "${prefix}${name}" "${name}${suffix}" "${name}"
     )
-    local value=''
-    local candidate=''
+    local value='' candidate=''
     set +u
     for candidate in "${candidates[@]}"; do
       value="${!candidate}"
@@ -57,8 +54,7 @@ define_util_core() {
   do_print_error() { printf "%s\n" "$(do_tint bold black on_red "${@}")"; }
   do_print_colorful() { printf "%s\n" "$(do_tint "${@}")"; }
   do_print_os_env() {
-    local key
-    local value
+    local key value
     while IFS='=' read -r key value; do
       do_print_dash_pair "$key" "$value"
     done < <(printenv)
@@ -109,9 +105,7 @@ define_util_core() {
       local code_block="$*"
       bat --language "$lang" --paging never --number <<<"${code_block}"
     else
-      local arg
-      local line
-      local i=1
+      local arg line i=1
       for arg in "$@"; do
         while IFS= read -r line; do
           printf "%s\n" "$(do_tint magenta "$(printf '#%3d|' "$i")" "$line")"
@@ -124,10 +118,8 @@ define_util_core() {
   do_tint() {
     if [ "$#" -le 0 ]; then return 0; fi
     local args=("$@")
-    local styles_clear="${_CIDOER_TPUT_COLORS_CLEAR:=$(do_lookup_color reset)}"
-    local styles=''
-    local code
-    local i=0
+    local styles='' styles_clear="${_CIDOER_TPUT_COLORS_CLEAR:=$(do_lookup_color reset)}"
+    local code i=0
     while [ "$i" -lt "${#args[@]}" ]; do
       case "${args[$i]}" in bold | dim | underline | blink | reverse | hidden | \
         black | red | green | yellow | blue | magenta | cyan | white | \
@@ -147,7 +139,6 @@ define_util_core() {
   }
   do_reset_tput() {
     if command -v tput >/dev/null 2>&1; then
-      local tp_cmd
       if tput colors &>/dev/null && [ "$(tput colors)" -ge 256 ]; then
         local tp_cmd='tput -T xterm-256color'
       else
