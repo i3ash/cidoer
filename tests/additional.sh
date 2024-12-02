@@ -33,4 +33,9 @@ do_func_invoke do_print_trace do_func_invoke do_print_trace
 do_print_section do_func_invoke
 do_diff _diff_v1.txt _diff_v2.txt || do_print_info 'do_diff returned' "$?"
 do_print_section do_diff
+
+do_print_dash_pair 'do_git_latest_tag' "$(do_git_latest_tag 1.0)"
+do_print_section do_git
+
 bash --version
+do_print_section bash version

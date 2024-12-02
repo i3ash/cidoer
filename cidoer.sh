@@ -143,59 +143,6 @@ define_util_core() {
     if [ ${#messages[@]} -eq 0 ]; then return; fi
     printf '%s%s%s' "$styles" "${messages[*]}" "$styles_clear"
   }
-  do_reset_tput() {
-    if command -v tput >/dev/null 2>&1; then
-      if tput colors &>/dev/null && [ "$(tput colors)" -ge 256 ]; then
-        local tp_cmd='tput -T xterm-256color'
-      else
-        local tp_cmd='tput -T xterm'
-      fi
-      CIDOER_TPUT_COLORS=(
-        "reset=$($tp_cmd sgr0)"
-        "black=$($tp_cmd setaf 0)"
-        "red=$($tp_cmd setaf 1)"
-        "green=$($tp_cmd setaf 2)"
-        "yellow=$($tp_cmd setaf 3)"
-        "blue=$($tp_cmd setaf 4)"
-        "magenta=$($tp_cmd setaf 5)"
-        "cyan=$($tp_cmd setaf 6)"
-        "white=$($tp_cmd setaf 7)"
-        "on_black=$($tp_cmd setab 0)"
-        "on_red=$($tp_cmd setab 1)"
-        "on_green=$($tp_cmd setab 2)"
-        "on_yellow=$($tp_cmd setab 3)"
-        "on_blue=$($tp_cmd setab 4)"
-        "on_magenta=$($tp_cmd setab 5)"
-        "on_cyan=$($tp_cmd setab 6)"
-        "on_white=$($tp_cmd setab 7)"
-        "bold=$($tp_cmd bold)"
-        "dim=$($tp_cmd dim)"
-        "underline=$($tp_cmd smul)"
-        "blink=$($tp_cmd blink)"
-        "reverse=$($tp_cmd rev)"
-        "hidden=$($tp_cmd invis)"
-      )
-    fi
-  }
-  do_lookup_color() {
-    if [ -z "${CIDOER_TPUT_COLORS:-}" ]; then return 0; fi
-    set +u
-    local key=${1}
-    set -u
-    if [ -z "$key" ]; then
-      printf $'do_lookup_color $1 (color) is required\n' >&2
-      return 1
-    fi
-    local color
-    for color in "${CIDOER_TPUT_COLORS[@]}"; do
-      case "$color" in
-      "$key="*)
-        printf '%s' "${color#*=}"
-        return 0
-        ;;
-      esac
-    done
-  }
   do_check_installed() {
     set +u
     local cmd="$1"
@@ -237,7 +184,7 @@ define_util_core() {
     fi
   }
   do_check_core_dependencies() {
-    do_check_optional_cmd date tput bat
+    do_check_optional_cmd date tput bat git
     do_check_required_cmd id hostname printenv diff awk
   }
   do_diff() {
@@ -285,6 +232,72 @@ define_util_core() {
       return "$diff_status"
     fi
     return "$diff_status"
+  }
+  do_git_latest_commit() { printf '%s' "$(git rev-parse --short=7 HEAD || printf '')"; }
+  do_git_latest_tag() {
+    local exact_tag
+    exact_tag=$(git describe --tags --exact-match 2>/dev/null || printf '')
+    if [ -n "$exact_tag" ]; then printf '%s' "$exact_tag"; else
+      local latest_tag latest_commit
+      latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || printf '')
+      latest_commit=$(do_git_latest_commit)
+      if [ -z "${latest_commit}" ]; then
+        printf '%s' "${latest_tag:-${1:-0}}"
+      else
+        printf '%s-%s' "${latest_tag:-${1:-0}}" "${latest_commit}"
+      fi
+    fi
+  }
+  do_lookup_color() {
+    if [ -z "${CIDOER_TPUT_COLORS:-}" ]; then return 0; fi
+    set +u
+    local key=${1}
+    set -u
+    if [ -z "$key" ]; then
+      printf $'do_lookup_color $1 (color) is required\n' >&2
+      return 1
+    fi
+    local color
+    for color in "${CIDOER_TPUT_COLORS[@]}"; do
+      case "$color" in
+      "$key="*)
+        printf '%s' "${color#*=}"
+        return 0
+        ;;
+      esac
+    done
+  }
+  do_reset_tput() {
+    if command -v tput >/dev/null 2>&1; then
+      if tput colors &>/dev/null && [ "$(tput colors)" -ge 256 ]; then
+        local tp_cmd='tput -T xterm-256color'
+      else local tp_cmd='tput -T xterm'; fi
+      CIDOER_TPUT_COLORS=(
+        "reset=$($tp_cmd sgr0)"
+        "black=$($tp_cmd setaf 0)"
+        "red=$($tp_cmd setaf 1)"
+        "green=$($tp_cmd setaf 2)"
+        "yellow=$($tp_cmd setaf 3)"
+        "blue=$($tp_cmd setaf 4)"
+        "magenta=$($tp_cmd setaf 5)"
+        "cyan=$($tp_cmd setaf 6)"
+        "white=$($tp_cmd setaf 7)"
+        "on_black=$($tp_cmd setab 0)"
+        "on_red=$($tp_cmd setab 1)"
+        "on_green=$($tp_cmd setab 2)"
+        "on_yellow=$($tp_cmd setab 3)"
+        "on_blue=$($tp_cmd setab 4)"
+        "on_magenta=$($tp_cmd setab 5)"
+        "on_cyan=$($tp_cmd setab 6)"
+        "on_white=$($tp_cmd setab 7)"
+        "bold=$($tp_cmd bold)"
+        "dim=$($tp_cmd dim)"
+        "underline=$($tp_cmd smul)"
+        "blink=$($tp_cmd blink)"
+        "reverse=$($tp_cmd rev)"
+        "hidden=$($tp_cmd invis)"
+      )
+    fi
   }
   do_reset_tput
 }
