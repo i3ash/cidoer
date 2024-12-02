@@ -49,9 +49,15 @@ jobs:
         run: bash additional.sh
       - name: Run Additional Tests on Docker Debian
         if: startsWith(runner.os, 'Linux')
-        working-directory: ${{ github.workspace }}/tests
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace/tests \
-            debian:latest bash -c "bash additional.sh"
+            debian:stable-slim bash -c "bash additional.sh"
+      - name: Run Additional Tests on Docker Alpine
+        if: startsWith(runner.os, 'Linux')
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace/tests \
+            alpine sh -c "apk add --no-cache bash && bash additional.sh"
