@@ -109,7 +109,7 @@ define_util_core() {
       for arg in "$@"; do
         while IFS= read -r line; do
           printf "%s\n" "$(do_tint magenta "$(printf '#%3d|' "$i")" "$line")"
-          ((i++))
+          i=$((i + 1))
         done <<<"$arg"
       done
     fi
@@ -117,18 +117,24 @@ define_util_core() {
   }
   do_tint() {
     if [ "$#" -le 0 ]; then return 0; fi
-    local args=("$@")
-    local styles='' styles_clear="${_CIDOER_TPUT_COLORS_CLEAR:=$(do_lookup_color reset)}"
-    local code i=0
+    if [ -z "${_CIDOER_TPUT_COLORS_CLEAR:-}" ]; then
+      _CIDOER_TPUT_COLORS_CLEAR=$(do_lookup_color reset)
+    fi
+    local styles_clear="${_CIDOER_TPUT_COLORS_CLEAR}"
+    if [ -z "${_CIDOER_TPUT_CMD_OK:-}" ]; then
+      if command -v tput >/dev/null 2>&1; then _CIDOER_TPUT_CMD_OK="yes"; else _CIDOER_TPUT_CMD_OK="no"; fi
+    fi
+    local tput_ok="${_CIDOER_TPUT_CMD_OK}"
+    local args=("$@") code i=0 styles=''
     while [ "$i" -lt "${#args[@]}" ]; do
       case "${args[$i]}" in bold | dim | underline | blink | reverse | hidden | \
         black | red | green | yellow | blue | magenta | cyan | white | \
         on_black | on_red | on_green | on_yellow | on_blue | on_magenta | on_cyan | on_white)
-        if command -v tput >/dev/null 2>&1; then
+        if [ 'yes' = "$tput_ok" ]; then
           code=$(do_lookup_color "${args[$i]}")
           if [ -n "$code" ]; then styles+="$code"; fi
         fi
-        ((i++))
+        i=$((i + 1))
         ;;
       *) break ;;
       esac
@@ -169,7 +175,6 @@ define_util_core() {
         "reverse=$($tp_cmd rev)"
         "hidden=$($tp_cmd invis)"
       )
-      _CIDOER_TPUT_COLORS_CLEAR="$(do_lookup_color reset)"
     fi
   }
   do_lookup_color() {
