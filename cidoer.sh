@@ -94,21 +94,20 @@ define_util_core() {
   }
   do_print_code_bash_fn() { do_print_code_bash "$(declare -f "$@")"; }
   do_print_code_bash() {
-    if command -v bat >/dev/null 2>&1; then
+    if command -v bat >/dev/null 2>&1 && [ ${#CIDOER_TPUT_COLORS} -gt 0 ]; then
       do_print_code_lines 'bash' "$@"
-    else
-      do_print_code_lines "$@"
-    fi
+    else do_print_code_lines "$@"; fi
   }
   do_print_code_lines() {
     if [ "$#" -le 0 ]; then return 0; fi
     local stack=''
     stack="$(do_stack_trace)"
     printf "%s\n" "$(do_tint magenta '#---|--------------------' "${stack}")"
-    if command -v bat >/dev/null 2>&1; then
+    if command -v bat >/dev/null 2>&1 && [ ${#CIDOER_TPUT_COLORS} -gt 0 ]; then
+      local lang="$1"
       shift
       local code_block="$*"
-      bat --language sh --paging never --number <<<"${code_block}"
+      bat --language "$lang" --paging never --number <<<"${code_block}"
     else
       local arg
       local line
@@ -237,7 +236,7 @@ define_util_core() {
       fi
     done
     if [ "$missing" -eq 1 ]; then
-      do_print_error "Please install the missing required commands and try again later."
+      do_print_error 'Please install the missing required commands and try again later.'
       return 1
     fi
   }
@@ -246,27 +245,50 @@ define_util_core() {
     do_check_required_cmd id hostname printenv diff awk
   }
   do_diff() {
+    if ! command -v diff >/dev/null 2>&1; then
+      do_print_error "Command diff is not available."
+      return 3
+    fi
+    if ! command -v awk >/dev/null 2>&1; then
+      do_print_error "Command awk is not available."
+      return 3
+    fi
+    local file1 file2
     set +u
-    if [ -z "${1}" ] || [ -z "${2}" ]; then
-      do_print_warn "$(do_stack_trace)" "(${1}, ${2})" $'$1 and $2 are required' >&2
-      set -u
-      return 0
+    if ! read -r file1 <<<"$(printf '%q' "$1")"; then
+      do_print_error 'Failed to escape file1.'
+      return 3
+    fi
+    if ! read -r file2 <<<"$(printf '%q' "$2")"; then
+      do_print_error 'Failed to escape file2.'
+      return 3
     fi
     set -u
-    do_print_trace "$(do_stack_trace)" "${1}" "${2}"
-    diff -U0 "${1}" "${2}" | awk '
+    do_print_trace "$(do_stack_trace)" "<$file1>" "<$file2>"
+    [ ! -f "$file1" ] && file1='/dev/null'
+    [ ! -f "$file2" ] && file2='/dev/null'
+    local color_r color_g reset
+    color_r="$(do_lookup_color red)"
+    color_g="$(do_lookup_color green)"
+    reset="$(do_lookup_color reset)"
+    diff -U0 "$file1" "$file2" | awk "
       /^@/ {
-        split($0, parts, " ")
-        split(parts[2], old, ",")
-        split(parts[3], new, ",")
+        split(\$0, parts,    \" \")
+        split(parts[2], old, \",\")
+        split(parts[3], new, \",\")
         old_line = substr(old[1], 2)
         new_line = substr(new[1], 2)
         next
       }
-      /^-/  { printf "\033[0;31m-|%03d| %s\033[0m\n", old_line++, substr($0,2) }
-      /^\+/ { printf "\033[0;32m+|%03d| %s\033[0m\n", new_line++, substr($0,2) }
-    '
-    return "${PIPESTATUS[0]}"
+      /^-/  { printf \"$color_r-|%03d| %s$reset\n\", old_line++, substr(\$0,2) }
+      /^\+/ { printf \"$color_g+|%03d| %s$reset\n\", new_line++, substr(\$0,2) }
+    "
+    local diff_status="${PIPESTATUS[0]}"
+    if [ "$diff_status" -ne 0 ] && [ "$diff_status" -ne 1 ]; then
+      do_print_error 'diff command failed with status' "$diff_status"
+      return "$diff_status"
+    fi
+    return "$diff_status"
   }
   do_reset_tput
 }
