@@ -47,3 +47,11 @@ jobs:
         working-directory: ${{ github.workspace }}/tests
         shell: bash
         run: bash additional.sh
+      - name: Run Additional Tests on Docker Debian
+        if: startsWith(runner.os, 'Linux')
+        working-directory: ${{ github.workspace }}/tests
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace/tests \
+            debian:latest bash -c "bash additional.sh"
