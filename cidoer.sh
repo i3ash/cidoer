@@ -94,7 +94,7 @@ define_util_core() {
   }
   do_print_code_bash_fn() { do_print_code_bash "$(declare -f "$@")"; }
   do_print_code_bash() {
-    if command -v bat >/dev/null 2>&1 && [ ${#CIDOER_TPUT_COLORS} -gt 0 ]; then
+    if command -v bat >/dev/null 2>&1 && [ -n "${CIDOER_TPUT_COLORS:-}" ]; then
       do_print_code_lines 'bash' "$@"
     else do_print_code_lines "$@"; fi
   }
@@ -103,7 +103,7 @@ define_util_core() {
     local stack=''
     stack="$(do_stack_trace)"
     printf "%s\n" "$(do_tint magenta '#---|--------------------' "${stack}")"
-    if command -v bat >/dev/null 2>&1 && [ ${#CIDOER_TPUT_COLORS} -gt 0 ]; then
+    if command -v bat >/dev/null 2>&1 && [ -n "${CIDOER_TPUT_COLORS:-}" ]; then
       local lang="$1"
       shift
       local code_block="$*"
@@ -182,7 +182,7 @@ define_util_core() {
     fi
   }
   do_lookup_color() {
-    if [ ${#CIDOER_TPUT_COLORS} -le 0 ]; then return 0; fi
+    if [ -z "${CIDOER_TPUT_COLORS:-}" ]; then return 0; fi
     set +u
     local key=${1}
     set -u
