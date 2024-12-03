@@ -1,9 +1,8 @@
 #!/usr/bin/env bats
 
-load ../cidoer.sh
+load ../cidoer.core.sh
 
 setup() {
-  define_util_core
   set +u
 }
 teardown() {

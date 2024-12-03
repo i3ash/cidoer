@@ -1,19 +1,44 @@
 #!/usr/bin/env bash
-set -eou pipefail
 # shellcheck disable=SC2317
+set -eou pipefail
 
-define_util_core() {
+define_core_utils() {
   if declare -F 'do_nothing' >/dev/null; then return 0; fi
   do_nothing() { :; }
+  do_check_core_dependencies() {
+    do_check_optional_cmd date tput bat git
+    do_check_required_cmd id hostname printenv diff awk
+  }
+  do_workflow_job() {
+    if [ "$#" -le 0 ] || [ -z "$1" ]; then
+      do_print_warn "$(do_stack_trace)" $'$1 (type) is required'
+      return 0
+    fi
+    local trimmed="${1#"${1%%[![:space:]]*}"}"
+    trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
+    if [[ ! "$trimmed" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+      do_print_warn "$(do_stack_trace)" $'$1 (type) is not a valid type name'
+      return 0
+    fi
+    local upper lower
+    upper=$(printf '%s' "$trimmed" | awk '{print toupper($0)}')
+    lower=$(printf '%s' "$trimmed" | awk '{print tolower($0)}')
+    do_print_section "${upper} JOB BEGIN"
+    do_func_invoke "define_custom_${lower}"
+    do_func_invoke "${lower}_custom_init"
+    do_func_invoke "${lower}_custom_do"
+    do_print_section "${upper} JOB DONE!" && printf '\n'
+  }
   do_stack_trace() {
-    printf '%s --> ' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}"
-    local fns=("${FUNCNAME[@]:1}")
-    local idx
-    for ((idx = ${#fns[@]} - 1; idx >= 0; idx--)); do
-      printf '%s' "${fns[idx]}"
-      if [ "$idx" -ne 0 ]; then printf ' '; fi
+    local idx filtered_fns=()
+    for ((idx = ${#FUNCNAME[@]} - 2; idx > 0; idx--)); do
+      if [ 'do_func_invoke' != "${FUNCNAME[idx]}" ]; then
+        filtered_fns+=("${FUNCNAME[idx]}")
+      fi
     done
-    printf '\n'
+    if [ ${#filtered_fns[@]} -gt 0 ]; then
+      printf '%s --> %s\n' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}" "${filtered_fns[*]}"
+    else printf '%s -->\n' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}"; fi
   }
   do_time_now() {
     if command -v date >/dev/null 2>&1; then printf '%s' "$(date +"%Y-%m-%d %T %Z")"; fi
@@ -73,14 +98,14 @@ define_util_core() {
   do_print_section() {
     local line='==============================================================================='
     if [ ${#} -le 0 ]; then
-      printf "%s\n" "$(do_tint cyan "=${line} $(do_time_now)")"
+      printf "%s\n" "$(do_tint bold cyan "=${line} $(do_time_now)")"
       return
     fi
     local title="${*}"
     local trimmed="${title#"${title%%[![:space:]]*}"}"
     trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
     if [ -n "${trimmed}" ]; then
-      printf "%s\n" "$(do_tint cyan "${trimmed} ${line:${#trimmed}} $(do_time_now)")"
+      printf "%s\n" "$(do_tint bold cyan "${trimmed} ${line:${#trimmed}} $(do_time_now)")"
     fi
   }
   do_print_debug() {
@@ -115,6 +140,8 @@ define_util_core() {
     fi
     printf "%s\n" "$(do_tint magenta '#---|--------------------' "${stack}")"
   }
+  declare -x _CIDOER_TPUT_CMD_OK
+  declare -x _CIDOER_TPUT_COLORS_CLEAR
   do_tint() {
     if [ "$#" -le 0 ]; then return 0; fi
     if [ -z "${_CIDOER_TPUT_COLORS_CLEAR:-}" ]; then
@@ -144,14 +171,11 @@ define_util_core() {
     printf '%s%s%s' "$styles" "${messages[*]}" "$styles_clear"
   }
   do_check_installed() {
-    set +u
-    local cmd="$1"
-    set -u
-    if [ -z "$cmd" ]; then
-      printf $'do_check_installed $1 (cmd) is required\n' >&2
+    if [ "$#" -le 0 ] || [ -z "$1" ]; then
+      do_print_warn "$(do_stack_trace)" $'$1 (cmd) is required'
       return 2
     fi
-    local cmd_path
+    local cmd="$1" cmd_path
     cmd_path=$(command -v "${cmd}" 2>/dev/null)
     if [ -n "${cmd_path}" ] && [ -x "${cmd_path}" ]; then
       do_print_dash_pair "${cmd}" "${cmd_path}"
@@ -182,10 +206,6 @@ define_util_core() {
       do_print_error 'Please install the missing required commands and try again later.'
       return 1
     fi
-  }
-  do_check_core_dependencies() {
-    do_check_optional_cmd date tput bat git
-    do_check_required_cmd id hostname printenv diff awk
   }
   do_diff() {
     if ! command -v diff >/dev/null 2>&1; then
@@ -250,14 +270,11 @@ define_util_core() {
   }
   do_lookup_color() {
     if [ -z "${CIDOER_TPUT_COLORS:-}" ]; then return 0; fi
-    set +u
-    local key=${1}
-    set -u
-    if [ -z "$key" ]; then
+    if [ "$#" -le 0 ] || [ -z "$1" ]; then
       printf $'do_lookup_color $1 (color) is required\n' >&2
       return 1
     fi
-    local color
+    local key=${1} color
     for color in "${CIDOER_TPUT_COLORS[@]}"; do
       case "$color" in
       "$key="*)
@@ -301,6 +318,8 @@ define_util_core() {
   }
   do_reset_tput
 }
+
 if declare -F 'do_nothing' >/dev/null; then return 0; fi
 declare CIDOER_DEBUG='no'
 declare -a CIDOER_TPUT_COLORS=()
+define_core_utils

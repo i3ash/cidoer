@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 
-load ../cidoer.sh
-setup() { define_util_core; }
+load ../cidoer.core.sh
+setup() { :; }
 teardown() { :; }
 
 @test "do_func_invoke | Calls existing function successfully" {

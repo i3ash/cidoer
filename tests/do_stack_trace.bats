@@ -1,11 +1,10 @@
 #!/usr/bin/env bats
 # shellcheck disable=SC2317
 
-load ../cidoer.sh
+load ../cidoer.core.sh
 
 setup() {
   ORIGINAL_PATH="$PATH"
-  define_util_core
 }
 
 teardown() {
@@ -23,5 +22,5 @@ teardown() {
   c() { do_stack_trace; }
   run a
   [[ "$status" == 0 ]]
-  [[ "${lines[0]}" == "$(whoami)@$(hostname) --> main "*"a b c" ]]
+  [[ "${lines[0]}" == "$(whoami)@$(hostname) --> "*"a b c" ]]
 }

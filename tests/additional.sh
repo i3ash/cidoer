@@ -1,8 +1,7 @@
 #!/usr/bin/env bash
 set -eou pipefail
-source ../cidoer.sh
+source ../cidoer.core.sh
 
-define_util_core
 # without colors
 #CIDOER_TPUT_COLORS=()
 do_stack_trace
@@ -39,4 +38,11 @@ do_print_dash_pair 'do_git_latest_tag' "$(do_git_latest_tag 1.0)"
 do_print_section do_git
 
 bash --version
-do_print_section bash version
+printf '\n'
+
+source cidoer.sh
+do_workflow_job build
+do_workflow_job upload
+do_workflow_job deploy
+do_workflow_job verify
+do_workflow_job docker_hub_push
