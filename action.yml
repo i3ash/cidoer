@@ -1,0 +1,13 @@
+name: 'CIDoer Action'
+description: 'A unified Bash scripting framework designed to seamlessly integrate with multiple CI/CD workflows'
+author: "Basher"
+inputs: { }
+outputs: { }
+runs:
+  using: composite
+  steps:
+    #- uses: actions/checkout@v4
+    - name: Export library path
+      shell: bash
+      run: |
+        printf '%s\n' "CIDOER_CORE_FILE=$(pwd)/cidoer.core.sh" >> $GITHUB_ENV

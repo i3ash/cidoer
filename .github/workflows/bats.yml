@@ -13,63 +13,53 @@ jobs:
       max-parallel: 1
     runs-on: ${{ matrix.os }}
     steps:
-      - name: Check tput
-        shell: bash
-        continue-on-error: true
-        run: |
-          printf "TERM=%s\n" "$TERM"
-          if command -v tput >/dev/null 2>&1; then
-            if tput colors &>/dev/null && [ "$(tput colors)" -ge 256 ]; then
-              export TERM=xterm-256color
-              echo "$(tput setaf 4)COLORS $(tput colors)$(tput sgr0)"
-            else
-              export TERM=xterm
-              echo "$(tput setaf 4)COLORS $(tput colors)$(tput sgr0)"
-            fi
-          fi
-          printf "TERM=%s\n" "$TERM"
-          echo "HELLO=123" >> $GITHUB_ENV
-          echo 'Finished'
       - uses: actions/checkout@v4
         with: { submodules: 'true' }
-      - name: Setup Bats and Bats Libs
-        id: setup-bats
-        uses: bats-core/bats-action@3.0.0
-        with:
-          support-path: "${{ github.workspace }}/tests/bats-support"
-          assert-path: "${{ github.workspace }}/tests/bats-assert"
-          detik-path: "${{ github.workspace }}/tests/bats-detik"
-          file-path: "${{ github.workspace }}/tests/bats-file"
+
+      - uses: i3ash/cidoer@develop
+
+      - name: Detect Branch or Tag
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/heads/* ]]; then
+            echo "Branch detected"
+            branch_name=${GITHUB_REF#refs/heads/}
+            echo "Current branch: $branch_name"
+            printf '%s\n' "CIDOER_GIT_REF=branch/$branch_name" >> $GITHUB_ENV
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            echo "Tag detected"
+            tag_name=${GITHUB_REF#refs/tags/}
+            echo "Current tag: $tag_name"
+            printf '%s\n' "CIDOER_GIT_REF=tag/$tag_name" >> $GITHUB_ENV
+          else
+            echo "Unknown ref: $GITHUB_REF"
+          fi
 
       - name: Test CIDoer Workflow (build & upload)
         working-directory: ${{ github.workspace }}
         shell: bash
         run: |
-          source cidoer.core.sh
+          printf '%s\n' ${{ steps.checkout.outputs.ref }}
+          printf '%s\n' "${CIDOER_CORE_FILE:?}"
+          source "${CIDOER_CORE_FILE:?}"
           source tests/cidoer.sh
           do_workflow_job build
           do_workflow_job upload
-
       - name: Test CIDoer Workflow (deploy)
         working-directory: ${{ github.workspace }}
         shell: bash
         run: |
-          source cidoer.core.sh
+          source "${CIDOER_CORE_FILE:?}"
           source tests/cidoer.sh
           do_workflow_job deploy
-
       - name: Test CIDoer Workflow (verify)
         working-directory: ${{ github.workspace }}
         shell: bash
         run: |
-          source cidoer.core.sh
+          source "${CIDOER_CORE_FILE:?}"
           source tests/cidoer.sh
           do_workflow_job verify
 
-      - name: Run Bats Tests
-        working-directory: ${{ github.workspace }}/tests
-        shell: bash
-        run: bats ./
       - name: Run Additional Tests
         working-directory: ${{ github.workspace }}/tests
         shell: bash
@@ -90,3 +80,17 @@ jobs:
             -v ${{ github.workspace }}:/workspace \
             -w /workspace/tests \
             alpine sh -c "apk add --no-cache bash ncurses && bash additional.sh"
+
+      - name: Setup Bats and Bats Libs
+        id: setup-bats
+        uses: bats-core/bats-action@3.0.0
+        with:
+          support-path: "${{ github.workspace }}/tests/bats-support"
+          assert-path: "${{ github.workspace }}/tests/bats-assert"
+          detik-path: "${{ github.workspace }}/tests/bats-detik"
+          file-path: "${{ github.workspace }}/tests/bats-file"
+
+      - name: Run Bats Tests
+        working-directory: ${{ github.workspace }}/tests
+        shell: bash
+        run: bats ./
