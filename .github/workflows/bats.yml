@@ -2,7 +2,7 @@ name: Test
 
 on:
   workflow_dispatch:
-  push: { branches: [ "main", "develop" ] }
+  push: { tags: [ "*" ], branches: [ "main", "develop" ] }
 
 jobs:
   build:
@@ -16,7 +16,7 @@ jobs:
       - uses: actions/checkout@v4
         with: { submodules: 'true' }
 
-      - uses: i3ash/cidoer@develop
+      - uses: i3ash/cidoer@main
 
       - name: Detect Branch or Tag
         shell: bash
