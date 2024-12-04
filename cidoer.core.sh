@@ -26,10 +26,10 @@ define_core_utils() {
     commit=$(git rev-parse --short HEAD)
     latest=$(git tag --merged HEAD | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
     if [ -z "$latest" ]; then
-      printf '0.%s-%s' "$(git rev-list HEAD --count)" "$commit"
+      printf '0+%s-%s' "$(git rev-list HEAD --count)" "$commit"
       return 0
     fi
-    printf '%s.%s-%s' "${latest}" "$(git rev-list "${latest}"..HEAD --count)" "$commit"
+    printf '%s+%s-%s' "${latest}" "$(git rev-list "${latest}"..HEAD --count)" "$commit"
   }
   do_workflow_job() {
     if [ "$#" -le 0 ] || [ -z "$1" ]; then
