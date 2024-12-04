@@ -1,9 +1,10 @@
 #!/usr/bin/env bash
 set -eou pipefail
-source ../cidoer.core.sh
 
-# without colors
+source ../cidoer.core.sh
+#CIDOER_DEBUG='yes'
 #CIDOER_TPUT_COLORS=()
+
 do_stack_trace
 do_print_section 'do_print_section'
 do_print_trace "do_print_trace"
@@ -12,6 +13,7 @@ do_print_warn "do_print_warn"
 do_print_colorful blue "do_print_colorful blue"
 do_print_colorful magenta "do_print_code_bash_fn"
 do_print_code_bash_fn 'do_print_code_bash_fn' 'do_print_code_bash' 'do_print_code_lines'
+do_print_debug bash "$(declare -f define_core_utils)"
 do_print_dash_pair 'HELLO' "${HELLO:-}"
 do_print_dash_pair 'do_print_dash_pair' ''
 #do_print_dash_pair 'do_print_os_env' ''

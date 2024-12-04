@@ -136,8 +136,7 @@ define_core_utils() {
     fi
   }
   do_print_debug() {
-    local _enabled="${CIDOER_DEBUG:-no}"
-    if [ "$_enabled" != "yes" ]; then return 0; fi
+    if [ "${CIDOER_DEBUG:-no}" != "yes" ]; then return 0; fi
     do_print_code_lines "$@" >&2
   }
   do_print_code_bash_fn() { do_print_code_bash "$(declare -f "$@")"; }
