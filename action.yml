@@ -2,6 +2,10 @@ name: 'CIDoer Action'
 description: 'A unified Bash scripting framework designed to seamlessly integrate with multiple CI/CD workflows'
 author: "Basher"
 inputs:
+  ref:
+    description: 'Git reference (branch, tag, or commit SHA) to download'
+    default: ''
+    required: false
   directory:
     description: 'Destination directory to place the source code'
     default: '.cidoer'
@@ -10,18 +14,18 @@ outputs: { }
 runs:
   using: composite
   steps:
-  - name: Copy source code from action path
+  - name: Download Source Code
     shell: bash
     run: |
-      echo "Action is running on ref: ${GITHUB_ACTION_REF}"
-      archive_url="https://github.com/i3ash/cidoer/archive/${GITHUB_ACTION_REF}.zip"
+      echo "Action is running on ref: ${{ inputs.ref }}"
+      archive_url="https://github.com/i3ash/cidoer/archive/${{ inputs.ref }}.zip"
       curl -fsSL "$archive_url" -o source.zip
       unzip -q source.zip -d "$(pwd)"
       rm source.zip
       rm -rf "$(pwd)/${{ inputs.directory }}"
-      mv cidoer-${GITHUB_ACTION_REF} ${{ inputs.directory }}
+      mv cidoer-${{ inputs.ref }} ${{ inputs.directory }}
       ls -lhAR ${{ inputs.directory }}
       source "$(pwd)/${{ inputs.directory }}/cidoer.core.sh"
-      do_print_info "$(do_stack_trace)"
       printf '%s\n' "CIDOER_DIR=$(pwd)/${{ inputs.directory }}" >> $GITHUB_ENV
       printf '%s\n' "CIDOER_CORE_FILE=$(pwd)/${{ inputs.directory }}/cidoer.core.sh" >> $GITHUB_ENV
+      do_print_section FINISHED

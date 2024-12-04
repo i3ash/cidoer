@@ -29,6 +29,7 @@ jobs:
           fetch-tags: true
       - name: Setup CIDoer
         uses: i3ash/cidoer@main
+        with: { ref: main }
       - name: Detect Branch or Tag
         shell: bash
         run: |
