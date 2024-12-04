@@ -13,23 +13,23 @@ define_core_utils() {
     local cmd
     for cmd in git grep sort tail; do
       if ! command -v "$cmd" >/dev/null 2>&1; then
-        do_print_warn 'Missing command:' " $cmd" >&2
-        return
+        do_print_warn 'Missing required command:' " $cmd" >&2
+        return 0
       fi
     done
-    local exact latest commit
-    exact=$(git tag --points-at HEAD | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
+    local exact latest commit count
+    exact=$(git tag --points-at HEAD 2>/dev/null | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
     if [ -n "$exact" ]; then
       printf '%s' "$exact"
       return 0
     fi
-    commit=$(git rev-parse --short HEAD)
-    latest=$(git tag --merged HEAD | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
-    if [ -z "$latest" ]; then
-      printf '0+%s-%s' "$(git rev-list HEAD --count)" "$commit"
-      return 0
-    fi
-    printf '%s+%s-%s' "${latest}" "$(git rev-list "${latest}"..HEAD --count)" "$commit"
+    latest=$(git tag --merged HEAD 2>/dev/null | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
+    if [ -n "$latest" ]; then
+      count=$(git rev-list "${latest}"..HEAD --count 2>/dev/null)
+    else count=$(git rev-list HEAD --count 2>/dev/null); fi
+    printf '%s%s' "${latest:-0}" "+$count"
+    commit=$(git rev-parse --short HEAD 2>/dev/null)
+    if [ -n "$commit" ]; then printf '%s' "-$commit"; fi
   }
   do_workflow_job() {
     if [ "$#" -le 0 ] || [ -z "$1" ]; then
