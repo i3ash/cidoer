@@ -1,13 +1,27 @@
 name: 'CIDoer Action'
 description: 'A unified Bash scripting framework designed to seamlessly integrate with multiple CI/CD workflows'
 author: "Basher"
-inputs: { }
+inputs:
+  directory:
+    description: 'Destination directory to place the source code'
+    default: '.cidoer'
+    required: false
 outputs: { }
 runs:
   using: composite
   steps:
-    #- uses: actions/checkout@v4
-    - name: Export library path
-      shell: bash
-      run: |
-        printf '%s\n' "CIDOER_CORE_FILE=$(pwd)/cidoer.core.sh" >> $GITHUB_ENV
+  - name: Copy source code from action path
+    shell: bash
+    run: |
+      echo "Action is running on ref: ${GITHUB_ACTION_REF}"
+      archive_url="https://github.com/i3ash/cidoer/archive/${GITHUB_ACTION_REF}.zip"
+      curl -fsSL "$archive_url" -o source.zip
+      unzip -q source.zip -d "$(pwd)"
+      rm source.zip
+      rm -rf "$(pwd)/${{ inputs.directory }}"
+      mv cidoer-${GITHUB_ACTION_REF} ${{ inputs.directory }}
+      ls -lhAR ${{ inputs.directory }}
+      source "$(pwd)/${{ inputs.directory }}/cidoer.core.sh"
+      do_print_info "$(do_stack_trace)"
+      printf '%s\n' "CIDOER_DIR=$(pwd)/${{ inputs.directory }}" >> $GITHUB_ENV
+      printf '%s\n' "CIDOER_CORE_FILE=$(pwd)/${{ inputs.directory }}/cidoer.core.sh" >> $GITHUB_ENV
