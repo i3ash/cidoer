@@ -13,14 +13,17 @@ jobs:
       max-parallel: 1
     runs-on: ${{ matrix.os }}
     steps:
-      - uses: actions/checkout@v4
-        with: { submodules: 'true' }
-
-      - uses: i3ash/cidoer@main
-
+      - name: Setup CIDoer
+        uses: i3ash/cidoer@main
+      - name: Checkout code for tag
+        uses: actions/checkout@v4
+        with:
+          submodules: true
       - name: Detect Branch or Tag
         shell: bash
         run: |
+          source "${CIDOER_CORE_FILE:?}"
+          do_print_dash_pair 'TAG' "$(git describe --tags `git rev-list --tags --max-count=1`)"
           if [[ "$GITHUB_REF" == refs/heads/* ]]; then
             echo "Branch detected"
             branch_name=${GITHUB_REF#refs/heads/}
