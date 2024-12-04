@@ -33,7 +33,11 @@ jobs:
         shell: bash
         run: |
           source "${CIDOER_CORE_FILE:?}"
-          do_print_dash_pair 'TAG' "$(git describe --tags `git rev-list --tags --max-count=1`)"
+          do_print_dash_pair 'GITHUB_RUN_NUMBER' "${{ github.run_number }}"
+          do_print_dash_pair 'TAG_1' "$(git describe --tags `git rev-list --tags --max-count=1`)"          
+          do_print_dash_pair 'TAG_2' "$(git describe --tags --abbrev=0 2>/dev/null || printf '')"
+          do_print_dash_pair 'TAG_3' \
+            "$(git tag --merged HEAD | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)"
           if [[ "$GITHUB_REF" == refs/heads/* ]]; then
             echo "Branch detected"
             branch_name=${GITHUB_REF#refs/heads/}
