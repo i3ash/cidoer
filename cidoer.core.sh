@@ -9,15 +9,24 @@ define_core_utils() {
     do_check_optional_cmd date tput bat git grep sort tail
     do_check_required_cmd id hostname printenv diff awk
   }
+  do_git_short_commit_hash () {
+    if ! command -v git >/dev/null 2>&1; then
+      do_print_warn 'WARNING: git is not installed' >&2
+      return 0
+    fi
+    local commit
+    commit=$(git rev-parse --short HEAD 2>/dev/null)
+    if [ -n "$commit" ]; then printf '%s' "$commit"; fi
+  }
   do_git_version_tag() {
     local cmd
     for cmd in git grep sort tail; do
       if ! command -v "$cmd" >/dev/null 2>&1; then
-        do_print_warn 'Missing required command:' " $cmd" >&2
+        do_print_warn 'WARNING: Required command is missing:' " $cmd" >&2
         return 0
       fi
     done
-    local exact latest commit count
+    local exact latest count
     exact=$(git tag --points-at HEAD 2>/dev/null | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
     if [ -n "$exact" ]; then
       printf '%s' "$exact"
@@ -25,11 +34,10 @@ define_core_utils() {
     fi
     latest=$(git tag --merged HEAD 2>/dev/null | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
     if [ -n "$latest" ]; then
+      printf '%s' "${latest}"
       count=$(git rev-list "${latest}"..HEAD --count 2>/dev/null)
     else count=$(git rev-list HEAD --count 2>/dev/null); fi
-    printf '%s%s' "${latest:-0}" "+$count"
-    commit=$(git rev-parse --short HEAD 2>/dev/null)
-    if [ -n "$commit" ]; then printf '%s' "-$commit"; fi
+    if [ -n "$count" ]; then printf '+%s' "$count"; fi
   }
   do_workflow_job() {
     if [ "$#" -le 0 ] || [ -z "$1" ]; then

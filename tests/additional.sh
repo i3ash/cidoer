@@ -45,4 +45,5 @@ do_workflow_job verify
 do_workflow_job docker_hub_push
 
 do_print_dash_pair 'do_git_version_tag' "$(do_git_version_tag)"
+do_print_dash_pair 'do_git_short_commit_hash' "$(do_git_short_commit_hash)"
 do_print_section do_git
