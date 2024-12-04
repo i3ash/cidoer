@@ -16,9 +16,19 @@ jobs:
       - name: Setup CIDoer
         uses: i3ash/cidoer@main
       - name: Checkout code for tag
+        if: startsWith(github.ref, 'refs/tags/')
         uses: actions/checkout@v4
         with:
-          submodules: true
+          submodules: 'true'
+          fetch-depth: 1
+          fetch-tags: false
+      - name: Checkout code for branch
+        if: startsWith(github.ref, 'refs/heads/')
+        uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+          fetch-depth: 0
+          fetch-tags: true
       - name: Detect Branch or Tag
         shell: bash
         run: |
