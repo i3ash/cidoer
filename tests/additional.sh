@@ -34,9 +34,6 @@ do_print_section do_func_invoke
 do_diff _diff_v1.txt _diff_v2.txt || do_print_info 'do_diff returned' "$?"
 do_print_section do_diff
 
-do_print_dash_pair 'do_git_latest_tag' "$(do_git_latest_tag 1.0)"
-do_print_section do_git
-
 bash --version
 printf '\n'
 
@@ -46,3 +43,6 @@ do_workflow_job upload
 do_workflow_job deploy
 do_workflow_job verify
 do_workflow_job docker_hub_push
+
+do_print_dash_pair 'do_git_version_tag' "$(do_git_version_tag)"
+do_print_section do_git

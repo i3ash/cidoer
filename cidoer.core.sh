@@ -6,8 +6,30 @@ define_core_utils() {
   if declare -F 'do_nothing' >/dev/null; then return 0; fi
   do_nothing() { :; }
   do_check_core_dependencies() {
-    do_check_optional_cmd date tput bat git
+    do_check_optional_cmd date tput bat git grep sort tail
     do_check_required_cmd id hostname printenv diff awk
+  }
+  do_git_version_tag() {
+    local cmd
+    for cmd in git grep sort tail; do
+      if ! command -v "$cmd" >/dev/null 2>&1; then
+        do_print_warn 'Missing command:' " $cmd" >&2
+        return
+      fi
+    done
+    local exact latest commit
+    exact=$(git tag --points-at HEAD | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
+    if [ -n "$exact" ]; then
+      printf '%s' "$exact"
+      return 0
+    fi
+    commit=$(git rev-parse --short HEAD)
+    latest=$(git tag --merged HEAD | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
+    if [ -z "$latest" ]; then
+      printf '0.%s-%s' "$(git rev-list HEAD --count)" "$commit"
+      return 0
+    fi
+    printf '%s.%s-%s' "${latest}" "$(git rev-list "${latest}"..HEAD --count)" "$commit"
   }
   do_workflow_job() {
     if [ "$#" -le 0 ] || [ -z "$1" ]; then
@@ -252,21 +274,6 @@ define_core_utils() {
       return "$diff_status"
     fi
     return "$diff_status"
-  }
-  do_git_latest_commit() { printf '%s' "$(git rev-parse --short=7 HEAD || printf '')"; }
-  do_git_latest_tag() {
-    local exact_tag
-    exact_tag=$(git describe --tags --exact-match 2>/dev/null || printf '')
-    if [ -n "$exact_tag" ]; then printf '%s' "$exact_tag"; else
-      local latest_tag latest_commit
-      latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || printf '')
-      latest_commit=$(do_git_latest_commit)
-      if [ -z "${latest_commit}" ]; then
-        printf '%s' "${latest_tag:-${1:-0}}"
-      else
-        printf '%s-%s' "${latest_tag:-${1:-0}}" "${latest_commit}"
-      fi
-    fi
   }
   do_lookup_color() {
     if [ -z "${CIDOER_TPUT_COLORS:-}" ]; then return 0; fi
