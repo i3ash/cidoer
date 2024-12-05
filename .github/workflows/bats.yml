@@ -27,9 +27,10 @@ jobs:
           submodules: 'true'
           fetch-depth: 20
           fetch-tags: true
+
       - name: Setup CIDoer
-        uses: i3ash/cidoer@main
-        with: { ref: main }
+        uses: ./
+
       - name: Detect Branch or Tag
         shell: bash
         run: |

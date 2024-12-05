@@ -4,7 +4,7 @@ author: "Basher"
 inputs:
   ref:
     description: 'Git reference (branch, tag, or commit SHA) to download'
-    default: ''
+    default: 'main'
     required: false
   directory:
     description: 'Destination directory to place the source code'
@@ -14,18 +14,31 @@ outputs: { }
 runs:
   using: composite
   steps:
-  - name: Download Source Code
-    shell: bash
-    run: |
-      echo "Action is running on ref: ${{ inputs.ref }}"
-      archive_url="https://github.com/i3ash/cidoer/archive/${{ inputs.ref }}.zip"
-      curl -fsSL "$archive_url" -o source.zip
-      unzip -q source.zip -d "$(pwd)"
-      rm source.zip
-      rm -rf "$(pwd)/${{ inputs.directory }}"
-      mv cidoer-${{ inputs.ref }} ${{ inputs.directory }}
-      ls -lhAR ${{ inputs.directory }}
-      source "$(pwd)/${{ inputs.directory }}/cidoer.core.sh"
-      printf '%s\n' "CIDOER_DIR=$(pwd)/${{ inputs.directory }}" >> $GITHUB_ENV
-      printf '%s\n' "CIDOER_CORE_FILE=$(pwd)/${{ inputs.directory }}/cidoer.core.sh" >> $GITHUB_ENV
-      do_print_section FINISHED
+    - id: setup-cidoer
+      shell: bash
+      env:
+        DOWNLOAD_REF: ${{ inputs.ref }}
+        DOWNLOAD_DIR: ${{ inputs.directory }}
+      run: |
+        setup_cidoer() {
+          local ref="${1:-main}" dir="${2:-.cidoer}" path
+          local archive_url="https://github.com/i3ash/cidoer/archive/$ref.zip"
+          printf '%s%s\n' 'Downloading:' "$archive_url"
+          curl -fsSL "$archive_url" -o source.zip
+          printf '%s%s\n' 'Extracting:' "$(pwd)"
+          unzip -q source.zip -d "$(pwd)"
+          rm source.zip
+          rm -rf "$(pwd)"/"${dir:?}"
+          mv "cidoer-$ref" "$dir"
+          ls -lhAR "$dir"
+          path="$(pwd)"/"$dir"
+          source "$path"/cidoer.core.sh
+          export CIDOER_DIR="$path"
+          export CIDOER_CORE_FILE="$path/cidoer.core.sh"
+          do_print_section FINISHED
+        }          
+        setup_cidoer "${DOWNLOAD_REF:-}" "${DOWNLOAD_DIR:-}"
+        if [ -n "${GITHUB_ENV:-}" ]; then
+          printf '%s\n' "CIDOER_DIR=$CIDOER_DIR" >>"$GITHUB_ENV"
+          printf '%s\n' "CIDOER_CORE_FILE=$CIDOER_CORE_FILE" >>"$GITHUB_ENV"
+        fi
