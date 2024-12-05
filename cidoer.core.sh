@@ -9,6 +9,26 @@ define_core_utils() {
     do_check_optional_cmd date tput bat git grep sort tail
     do_check_required_cmd id hostname printenv diff awk
   }
+  do_os_type() {
+    if [ -n "${CIDOER_OS_TYPE:-}" ]; then
+      printf '%s' "$CIDOER_OS_TYPE"
+      return 0
+    fi
+    local system
+    if [ -n "${OSTYPE:-}" ]; then
+      system="${OSTYPE:-}"
+    else
+      if command -v uname >/dev/null 2>&1; then system="$(uname -s | tr '[:upper:]' '[:lower:]')"; fi
+    fi
+    case "$system" in
+    linux*) system="linux" ;;
+    darwin*) system="darwin" ;;
+    cygwin* | msys* | mingw* | windows*) system="windows" ;;
+    *) system="unknown" ;;
+    esac
+    CIDOER_OS_TYPE="${system}"
+    printf '%s' "$CIDOER_OS_TYPE"
+  }
   do_git_version_tag() {
     local cmd
     for cmd in git grep sort tail; do
@@ -331,6 +351,7 @@ define_core_utils() {
 }
 
 if declare -F 'do_nothing' >/dev/null; then return 0; fi
+declare CIDOER_OS_TYPE=''
 declare CIDOER_DEBUG='no'
 declare -a CIDOER_TPUT_COLORS=()
 define_core_utils

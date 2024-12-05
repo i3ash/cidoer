@@ -36,7 +36,9 @@ runs:
           export CIDOER_DIR="$path"
           export CIDOER_CORE_FILE="$path/cidoer.core.sh"
           do_print_section FINISHED
-        }          
+          uname -a || print 'uname error'
+          do_print_dash_pair 'CIDOER_OS_TYPE' "$(do_os_type)"
+        }
         setup_cidoer "${DOWNLOAD_REF:-}" "${DOWNLOAD_DIR:-}"
         if [ -n "${GITHUB_ENV:-}" ]; then
           printf '%s\n' "CIDOER_DIR=$CIDOER_DIR" >>"$GITHUB_ENV"
