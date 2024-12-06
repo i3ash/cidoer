@@ -28,38 +28,30 @@ jobs:
           fetch-depth: 20
           fetch-tags: true
 
-      - name: Setup CIDoer
-        uses: ./
-
       - name: Detect Branch or Tag
         shell: bash
         run: |
-          source "${CIDOER_CORE_FILE:?}"
-          do_print_dash_pair 'GITHUB_RUN_NUMBER' "${{ github.run_number }}"
-          do_print_dash_pair 'TAG_1' "$(git describe --tags `git rev-list --tags --max-count=1`)"          
-          do_print_dash_pair 'TAG_2' "$(git describe --tags --abbrev=0 2>/dev/null || printf '')"
-          do_print_dash_pair 'TAG_3' \
-            "$(git tag --merged HEAD | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)"
           if [[ "$GITHUB_REF" == refs/heads/* ]]; then
-            echo "Branch detected"
             branch_name=${GITHUB_REF#refs/heads/}
-            echo "Current branch: $branch_name"
-            printf '%s\n' "CIDOER_GIT_REF=branch/$branch_name" >> $GITHUB_ENV
+            printf '%s\n' "Current branch: $branch_name"
+            printf '%s\n' "CIDOER_GIT_REF=$branch_name" >> $GITHUB_ENV
           elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
-            echo "Tag detected"
             tag_name=${GITHUB_REF#refs/tags/}
-            echo "Current tag: $tag_name"
-            printf '%s\n' "CIDOER_GIT_REF=tag/$tag_name" >> $GITHUB_ENV
+            printf '%s\n' "Current tag: $tag_name"
+            printf '%s\n' "CIDOER_GIT_REF=$tag_name" >> $GITHUB_ENV
           else
-            echo "Unknown ref: $GITHUB_REF"
+            printf '%s\n' "CIDOER_GIT_REF=main" >> $GITHUB_ENV
           fi
+
+      - name: Setup CIDoer
+        uses: i3ash/setup-cidoer@v1
+        with:
+          ref: ${{ env.CIDOER_GIT_REF }}
 
       - name: Test CIDoer Workflow (build & upload)
         working-directory: ${{ github.workspace }}
         shell: bash
         run: |
-          printf '%s\n' ${{ steps.checkout.outputs.ref }}
-          printf '%s\n' "${CIDOER_CORE_FILE:?}"
           source "${CIDOER_CORE_FILE:?}"
           source tests/cidoer.sh
           do_workflow_job build
