@@ -7,7 +7,31 @@ define_core_utils() {
   do_nothing() { :; }
   do_check_core_dependencies() {
     do_check_optional_cmd date tput bat git grep sort tail
-    do_check_required_cmd id hostname printenv diff awk
+    do_check_required_cmd id hostname printenv tr awk diff
+  }
+  do_workflow_job() {
+    local job_type
+    job_type=$(do_trim "$1")
+    if ! [[ "$job_type" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+      do_print_warn "$(do_stack_trace)" $'$1 (job_type) is not a valid format'
+      return 1
+    fi
+    local upper lower
+    upper=$(printf '%s' "$job_type" | tr '[:lower:]' '[:upper:]')
+    lower=$(printf '%s' "$job_type" | tr '[:upper:]' '[:lower:]')
+    do_print_section "${upper} JOB BEGIN"
+    do_func_invoke "define_custom_${lower}"
+    local args=("$@")
+    local arg step i=0
+    for arg in "${args[@]:1}"; do
+      step=$(do_trim "$arg")
+      if [[ -n "$step" ]] && [[ "$step" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
+        do_func_invoke "${lower}_custom_${step}"
+        i=$((i + 1))
+      fi
+    done
+    if [ $i -eq 0 ]; then do_func_invoke "${lower}_custom_do"; fi
+    do_print_section "${upper} JOB DONE!" && printf '\n'
   }
   do_os_type() {
     if [ -n "${CIDOER_OS_TYPE:-}" ]; then
@@ -56,26 +80,6 @@ define_core_utils() {
   do_git_short_commit_hash() {
     printf '%s' "$(git rev-parse --short HEAD 2>/dev/null)"
   }
-  do_workflow_job() {
-    if [ "$#" -le 0 ] || [ -z "$1" ]; then
-      do_print_warn "$(do_stack_trace)" $'$1 (type) is required'
-      return 0
-    fi
-    local trimmed="${1#"${1%%[![:space:]]*}"}"
-    trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
-    if [[ ! "$trimmed" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
-      do_print_warn "$(do_stack_trace)" $'$1 (type) is not a valid type name'
-      return 0
-    fi
-    local upper lower
-    upper=$(printf '%s' "$trimmed" | awk '{print toupper($0)}')
-    lower=$(printf '%s' "$trimmed" | awk '{print tolower($0)}')
-    do_print_section "${upper} JOB BEGIN"
-    do_func_invoke "define_custom_${lower}"
-    do_func_invoke "${lower}_custom_init"
-    do_func_invoke "${lower}_custom_do"
-    do_print_section "${upper} JOB DONE!" && printf '\n'
-  }
   do_stack_trace() {
     local idx filtered_fns=()
     for ((idx = ${#FUNCNAME[@]} - 2; idx > 0; idx--)); do
@@ -103,6 +107,12 @@ define_core_utils() {
         do_print_warn "$(do_stack_trace)" "${func_name} failed with exit code ${exit_code}" >&2
       fi
     else do_print_trace "$(do_stack_trace)" "${func_name} is an absent function" >&2; fi
+  }
+  do_trim() {
+    local var="${1:-}"
+    var="${var#"${var%%[![:space:]]*}"}"
+    var="${var%"${var##*[![:space:]]}"}"
+    printf '%s' "$var"
   }
   do_print_variable() {
     if [ "$#" -le 0 ]; then return 0; fi
@@ -143,16 +153,14 @@ define_core_utils() {
     fi
   }
   do_print_section() {
-    local line='==============================================================================='
+    local title line='==============================================================================='
     if [ ${#} -le 0 ]; then
       printf "%s\n" "$(do_tint bold cyan "=${line} $(do_time_now)")"
       return
     fi
-    local title="${*}"
-    local trimmed="${title#"${title%%[![:space:]]*}"}"
-    trimmed="${trimmed%"${trimmed##*[![:space:]]}"}"
-    if [ -n "${trimmed}" ]; then
-      printf "%s\n" "$(do_tint bold cyan "${trimmed} ${line:${#trimmed}} $(do_time_now)")"
+    title=$(do_trim "${*}")
+    if [ -n "${title}" ]; then
+      printf "%s\n" "$(do_tint bold cyan "${title} ${line:${#title}} $(do_time_now)")"
     fi
   }
   do_print_debug() {

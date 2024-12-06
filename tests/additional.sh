@@ -43,8 +43,8 @@ source cidoer.sh
 do_workflow_job build
 do_workflow_job upload
 do_workflow_job deploy
-do_workflow_job verify
-do_workflow_job docker_hub_push
+do_workflow_job verify init 'do'
+do_workflow_job docker step1 step2 step3
 
 do_print_dash_pair 'do_git_version_tag' "$(do_git_version_tag)"
 do_print_dash_pair 'do_git_count_commits_since' "$(do_git_count_commits_since "$(do_git_version_tag)")"
