@@ -20,17 +20,17 @@ define_core_utils() {
     upper=$(printf '%s' "$job_type" | tr '[:lower:]' '[:upper:]')
     lower=$(printf '%s' "$job_type" | tr '[:upper:]' '[:lower:]')
     do_print_section "${upper} JOB BEGIN"
-    do_func_invoke "define_custom_${lower}"
+    do_func_invoke "define_${lower}"
     local args=("$@")
     local arg step i=0
     for arg in "${args[@]:1}"; do
       step=$(do_trim "$arg")
       if [[ -n "$step" ]] && [[ "$step" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
-        do_func_invoke "${lower}_custom_${step}"
+        do_func_invoke "${lower}_${step}"
         i=$((i + 1))
       fi
     done
-    if [ $i -eq 0 ]; then do_func_invoke "${lower}_custom_do"; fi
+    if [ $i -eq 0 ]; then do_func_invoke "${lower}_do"; fi
     do_print_section "${upper} JOB DONE!" && printf '\n'
   }
   do_os_type() {

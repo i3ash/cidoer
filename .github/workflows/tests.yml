@@ -43,8 +43,7 @@ jobs:
             printf '%s\n' "CIDOER_GIT_REF=main" >> $GITHUB_ENV
           fi
 
-      - name: Setup CIDoer
-        uses: i3ash/setup-cidoer@v1
+      - uses: i3ash/setup-cidoer@v1
         with:
           ref: ${{ env.CIDOER_GIT_REF }}
 
