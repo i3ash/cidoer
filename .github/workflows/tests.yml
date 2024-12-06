@@ -1,0 +1,107 @@
+name: Test
+
+on:
+  workflow_dispatch:
+  push: { tags: [ "*" ], branches: [ "main", "develop" ] }
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        os: [ ubuntu-latest, macos-latest, windows-latest ]
+      fail-fast: true
+      max-parallel: 1
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Checkout code for tag
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+          fetch-depth: 1
+          fetch-tags: false
+      - name: Checkout code for branch
+        if: startsWith(github.ref, 'refs/heads/')
+        uses: actions/checkout@v4
+        with:
+          submodules: 'true'
+          fetch-depth: 20
+          fetch-tags: true
+
+      - name: Detect Branch or Tag
+        shell: bash
+        run: |
+          if [[ "$GITHUB_REF" == refs/heads/* ]]; then
+            branch_name=${GITHUB_REF#refs/heads/}
+            printf '%s\n' "Current branch: $branch_name"
+            printf '%s\n' "CIDOER_GIT_REF=$branch_name" >> $GITHUB_ENV
+          elif [[ "$GITHUB_REF" == refs/tags/* ]]; then
+            tag_name=${GITHUB_REF#refs/tags/}
+            printf '%s\n' "Current tag: $tag_name"
+            printf '%s\n' "CIDOER_GIT_REF=$tag_name" >> $GITHUB_ENV
+          else
+            printf '%s\n' "CIDOER_GIT_REF=main" >> $GITHUB_ENV
+          fi
+
+      - name: Setup CIDoer
+        uses: i3ash/setup-cidoer@v1
+        with:
+          ref: ${{ env.CIDOER_GIT_REF }}
+
+      - name: Test CIDoer Workflow (build & upload)
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        run: |
+          source "${CIDOER_CORE_FILE:?}"
+          source tests/cidoer.sh
+          do_workflow_job build
+          do_workflow_job upload
+      - name: Test CIDoer Workflow (deploy)
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        run: |
+          source "${CIDOER_CORE_FILE:?}"
+          source tests/cidoer.sh
+          do_workflow_job deploy
+      - name: Test CIDoer Workflow (verify)
+        working-directory: ${{ github.workspace }}
+        shell: bash
+        run: |
+          source "${CIDOER_CORE_FILE:?}"
+          source tests/cidoer.sh
+          do_workflow_job verify
+
+      - name: Run Additional Tests
+        working-directory: ${{ github.workspace }}/tests
+        shell: bash
+        run: |
+          export HELLO=${{ env.HELLO }}
+          bash additional.sh
+      - name: Run Additional Tests on Docker Debian
+        if: startsWith(runner.os, 'Linux')
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace/tests \
+            debian:stable-slim bash additional.sh
+      - name: Run Additional Tests on Docker Alpine
+        if: startsWith(runner.os, 'Linux')
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace/tests \
+            alpine sh -c "apk add --no-cache bash ncurses && bash additional.sh"
+
+      - name: Setup Bats and Bats Libs
+        id: setup-bats
+        uses: bats-core/bats-action@3.0.0
+        with:
+          support-path: "${{ github.workspace }}/tests/bats-support"
+          assert-path: "${{ github.workspace }}/tests/bats-assert"
+          detik-path: "${{ github.workspace }}/tests/bats-detik"
+          file-path: "${{ github.workspace }}/tests/bats-file"
+
+      - name: Run Bats Tests
+        working-directory: ${{ github.workspace }}/tests
+        shell: bash
+        run: bats ./
