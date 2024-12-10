@@ -6,7 +6,7 @@ define_core_utils() {
   if declare -F 'do_nothing' >/dev/null; then return 0; fi
   do_nothing() { :; }
   do_check_core_dependencies() {
-    do_check_optional_cmd date tput bat git grep sort tail
+    do_check_optional_cmd uname date tput bat git grep sort tail
     do_check_required_cmd id hostname printenv tr awk diff
   }
   do_workflow_job() {
@@ -45,13 +45,39 @@ define_core_utils() {
       if command -v uname >/dev/null 2>&1; then system="$(uname -s | tr '[:upper:]' '[:lower:]')"; fi
     fi
     case "$system" in
-    linux*) system="linux" ;;
-    darwin*) system="darwin" ;;
-    cygwin* | msys* | mingw* | windows*) system="windows" ;;
-    *) system="unknown" ;;
+    linux*) system='linux' ;;
+    darwin*) system='darwin' ;;
+    cygwin* | msys* | mingw* | windows*) system='windows' ;;
+    *) system='unknown' ;;
     esac
     CIDOER_OS_TYPE="${system}"
     printf '%s' "$CIDOER_OS_TYPE"
+  }
+  do_host_type() {
+    if [ -n "${CIDOER_HOST_TYPE:-}" ]; then
+      printf '%s' "$CIDOER_HOST_TYPE"
+      return 0
+    fi
+    local arch type
+    if [ -n "${HOSTTYPE:-}" ]; then
+      arch="${HOSTTYPE:-}"
+    else
+      if command -v uname >/dev/null 2>&1; then arch="$(uname -m)"; fi
+    fi
+    arch="$(printf '%s' "$arch" | tr '[:upper:]' '[:lower:]')"
+    case "$arch" in
+    x86_64 | amd64 | x64) type='x86_64' ;;
+    i*86 | x86) type='x86' ;;
+    arm64 | aarch64) type='arm64' ;;
+    armv5* | armv6* | armv7* | aarch32) type='arm' ;;
+    armv8*) type="$arch" ;;
+    ppc | powerpc) type='ppc' ;;
+    ppc64 | ppc64le) type="$arch" ;;
+    mips | mips64 | mipsle | mips64le | s390x | riscv64) type="$arch" ;;
+    *) type='unknown' ;;
+    esac
+    CIDOER_HOST_TYPE="$type"
+    printf '%s' "$CIDOER_HOST_TYPE"
   }
   do_git_version_tag() {
     local cmd
@@ -360,6 +386,7 @@ define_core_utils() {
 
 if declare -F 'do_nothing' >/dev/null; then return 0; fi
 declare CIDOER_OS_TYPE=''
+declare CIDOER_HOST_TYPE=''
 declare CIDOER_DEBUG='no'
 declare -a CIDOER_TPUT_COLORS=()
 define_core_utils

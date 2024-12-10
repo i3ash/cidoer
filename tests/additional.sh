@@ -50,3 +50,6 @@ do_print_dash_pair 'do_git_version_tag' "$(do_git_version_tag)"
 do_print_dash_pair 'do_git_count_commits_since' "$(do_git_count_commits_since "$(do_git_version_tag)")"
 do_print_dash_pair 'do_git_short_commit_hash' "$(do_git_short_commit_hash)"
 do_print_section do_git
+
+do_print_dash_pair 'do_os_type' "$(do_os_type)"
+do_print_dash_pair 'do_host_type' "$(do_host_type)"
