@@ -220,7 +220,6 @@ define_core_utils() {
     fi
     printf "%s\n" "$(do_tint magenta '#---|--------------------' "${stack}")"
   }
-  declare -x _CIDOER_TPUT_CMD_OK
   declare -x _CIDOER_TPUT_COLORS_CLEAR
   do_tint() {
     if [ "$#" -le 0 ]; then return 0; fi
@@ -228,19 +227,13 @@ define_core_utils() {
       _CIDOER_TPUT_COLORS_CLEAR=$(do_lookup_color reset)
     fi
     local styles_clear="${_CIDOER_TPUT_COLORS_CLEAR}"
-    if [ -z "${_CIDOER_TPUT_CMD_OK:-}" ]; then
-      if command -v tput >/dev/null 2>&1; then _CIDOER_TPUT_CMD_OK="yes"; else _CIDOER_TPUT_CMD_OK="no"; fi
-    fi
-    local tput_ok="${_CIDOER_TPUT_CMD_OK}"
     local args=("$@") code i=0 styles=''
     while [ "$i" -lt "${#args[@]}" ]; do
       case "${args[$i]}" in bold | dim | underline | blink | reverse | hidden | \
         black | red | green | yellow | blue | magenta | cyan | white | \
         on_black | on_red | on_green | on_yellow | on_blue | on_magenta | on_cyan | on_white)
-        if [ 'yes' = "$tput_ok" ]; then
-          code=$(do_lookup_color "${args[$i]}")
-          if [ -n "$code" ]; then styles+="$code"; fi
-        fi
+        code=$(do_lookup_color "${args[$i]}")
+        if [ -n "$code" ]; then styles+="$code"; fi
         i=$((i + 1))
         ;;
       *) break ;;
@@ -248,7 +241,7 @@ define_core_utils() {
     done
     local messages=("${args[@]:$i}")
     if [ ${#messages[@]} -eq 0 ]; then return; fi
-    printf '%s%s%s' "$styles" "${messages[*]}" "$styles_clear"
+    printf "$styles%s$styles_clear" "${messages[*]}"
   }
   do_check_installed() {
     if [ "$#" -le 0 ] || [ -z "$1" ]; then
@@ -350,34 +343,69 @@ define_core_utils() {
     done
   }
   do_reset_tput() {
+    CIDOER_TPUT_COLORS=()
     if command -v tput >/dev/null 2>&1; then
-      if tput colors &>/dev/null && [ "$(tput colors)" -ge 256 ]; then
-        local tp_cmd='tput -T xterm-256color'
-      else local tp_cmd='tput -T xterm'; fi
+      local tp_cmd colors
+      tp_cmd='tput'
+      if tput -T xterm-256color colors >/dev/null 2>&1; then
+        tp_cmd='tput -T xterm-256color'
+      elif tput -T xterm colors >/dev/null 2>&1; then
+        tp_cmd='tput -T xterm'
+      fi
+      colors=$($tp_cmd colors 2>/dev/null || printf '0')
+      if [ "$colors" -gt 0 ]; then
+        CIDOER_TPUT_COLORS=(
+          "reset=$($tp_cmd sgr0)"
+          "black=$($tp_cmd setaf 0)"
+          "red=$($tp_cmd setaf 1)"
+          "green=$($tp_cmd setaf 2)"
+          "yellow=$($tp_cmd setaf 3)"
+          "blue=$($tp_cmd setaf 4)"
+          "magenta=$($tp_cmd setaf 5)"
+          "cyan=$($tp_cmd setaf 6)"
+          "white=$($tp_cmd setaf 7)"
+          "on_black=$($tp_cmd setab 0)"
+          "on_red=$($tp_cmd setab 1)"
+          "on_green=$($tp_cmd setab 2)"
+          "on_yellow=$($tp_cmd setab 3)"
+          "on_blue=$($tp_cmd setab 4)"
+          "on_magenta=$($tp_cmd setab 5)"
+          "on_cyan=$($tp_cmd setab 6)"
+          "on_white=$($tp_cmd setab 7)"
+          "bold=$($tp_cmd bold)"
+          "dim=$($tp_cmd dim)"
+          "underline=$($tp_cmd smul)"
+          "blink=$($tp_cmd blink)"
+          "reverse=$($tp_cmd rev)"
+          "hidden=$($tp_cmd invis)"
+        )
+      fi
+    fi
+    if [ ${#CIDOER_TPUT_COLORS[@]} -le 0 ]; then
       CIDOER_TPUT_COLORS=(
-        "reset=$($tp_cmd sgr0)"
-        "black=$($tp_cmd setaf 0)"
-        "red=$($tp_cmd setaf 1)"
-        "green=$($tp_cmd setaf 2)"
-        "yellow=$($tp_cmd setaf 3)"
-        "blue=$($tp_cmd setaf 4)"
-        "magenta=$($tp_cmd setaf 5)"
-        "cyan=$($tp_cmd setaf 6)"
-        "white=$($tp_cmd setaf 7)"
-        "on_black=$($tp_cmd setab 0)"
-        "on_red=$($tp_cmd setab 1)"
-        "on_green=$($tp_cmd setab 2)"
-        "on_yellow=$($tp_cmd setab 3)"
-        "on_blue=$($tp_cmd setab 4)"
-        "on_magenta=$($tp_cmd setab 5)"
-        "on_cyan=$($tp_cmd setab 6)"
-        "on_white=$($tp_cmd setab 7)"
-        "bold=$($tp_cmd bold)"
-        "dim=$($tp_cmd dim)"
-        "underline=$($tp_cmd smul)"
-        "blink=$($tp_cmd blink)"
-        "reverse=$($tp_cmd rev)"
-        "hidden=$($tp_cmd invis)"
+        "reset=\033[0m"
+        "black=\033[30m"
+        "red=\033[31m"
+        "green=\033[32m"
+        "yellow=\033[33m"
+        "blue=\033[34m"
+        "magenta=\033[35m"
+        "cyan=\033[36m"
+        "white=\033[37m"
+        "on_black=\033[40m"
+        "on_red=\033[41m"
+        "on_green=\033[42m"
+        "on_yellow=\033[43m"
+        "on_blue=\033[44m"
+        "on_magenta=\033[45m"
+        "on_cyan=\033[46m"
+        "on_white=\033[47m"
+        "bold=\033[1m"
+        "dim=\033[2m"
+        "underline=\033[4m"
+        "blink=\033[5m"
+        "reverse=\033[7m"
+        "hidden=\033[8m"
       )
     fi
   }
