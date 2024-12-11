@@ -4,6 +4,11 @@ set -eou pipefail
 source ../cidoer.core.sh
 #CIDOER_DEBUG='yes'
 #CIDOER_TPUT_COLORS=()
+if [ ${#CIDOER_TPUT_COLORS} -gt 0 ]; then
+  for line in "${CIDOER_TPUT_COLORS[@]}"; do
+    printf "${line#*=}+++ ${line%%=*} +++$(do_lookup_color reset)%s\n"
+  done
+fi
 
 do_stack_trace
 do_print_section 'do_print_section'
