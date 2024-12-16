@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2317
+if declare -F 'define_core_utils' >/dev/null; then return 0; fi
 set -eou pipefail
 
 define_core_utils() {
@@ -412,7 +413,6 @@ define_core_utils() {
   do_reset_tput
 }
 
-if declare -F 'do_nothing' >/dev/null; then return 0; fi
 declare CIDOER_OS_TYPE=''
 declare CIDOER_HOST_TYPE=''
 declare CIDOER_DEBUG='no'
