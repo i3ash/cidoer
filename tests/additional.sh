@@ -69,3 +69,6 @@ do_print_section do_git
 
 do_print_dash_pair 'do_os_type' "$(do_os_type)"
 do_print_dash_pair 'do_host_type' "$(do_host_type)"
+
+do_func_invoke do_http_fetch 'https://raw.githubusercontent.com/i3ash/cidoer/refs/heads/main/stable.txt'
+do_func_invoke do_http_fetch 'http://this-domain-does-not-exist.invalid'

@@ -82,7 +82,7 @@ jobs:
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace/tests \
-            debian:stable-slim bash additional.sh
+            debian:stable-slim sh -c "apt-get update && apt-get install curl -y && bash additional.sh"
       - name: Run Additional Tests on Docker Alpine
         if: startsWith(runner.os, 'Linux')
         run: |

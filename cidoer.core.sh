@@ -7,7 +7,7 @@ define_core_utils() {
   if declare -F 'do_nothing' >/dev/null; then return 0; fi
   do_nothing() { :; }
   do_check_core_dependencies() {
-    do_check_optional_cmd uname date tput bat git grep sort tail
+    do_check_optional_cmd uname date tput bat git grep sort tail curl wget
     do_check_required_cmd id hostname printenv tr awk diff
   }
   do_workflow_job() {
@@ -502,6 +502,41 @@ define_core_utils() {
       map_vals+=("${kv#*=}")
     done
     _replace "$open_char" "$close_char"
+  }
+  do_http_fetch() {
+    local address="${1:?Usage: do_http_fetch <URL> [output]}"
+    local output="${2:-}"
+    local tries="${CIDOER_FETCH_RETRIES:-2}"
+    local waitretry="${CIDOER_FETCH_WAIT_RETRY:-1}"
+    local timeout="${CIDOER_FETCH_TIMEOUT:-20}"
+    if command -v wget >/dev/null 2>&1; then
+      if [ -n "$output" ]; then
+        wget -q --tries="$tries" --timeout="$timeout" -O "$output" "$address" || {
+          do_print_error "$(do_stack_trace)" "Error: wget failed." >&2
+          return 1
+        }
+      else
+        wget -q --tries="$tries" --timeout="$timeout" -O - "$address" || {
+          do_print_error "$(do_stack_trace)" "Error: wget failed." >&2
+          return 1
+        }
+      fi
+    elif command -v curl >/dev/null 2>&1; then
+      if [ -n "$output" ]; then
+        curl -fsSL --retry "$tries" --retry-delay "$waitretry" --max-time "$timeout" "$address" -o "$output" || {
+          do_print_error "$(do_stack_trace)" "Error: curl failed." >&2
+          return 1
+        }
+      else
+        curl -fsSL --retry "$tries" --retry-delay "$waitretry" --max-time "$timeout" "$address" || {
+          do_print_error "$(do_stack_trace)" "Error: curl failed." >&2
+          return 1
+        }
+      fi
+    else
+      do_print_error "$(do_stack_trace)" "Error: Neither 'wget' nor 'curl' is installed." >&2
+      return 2
+    fi
   }
 }
 
