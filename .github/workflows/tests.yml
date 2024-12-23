@@ -2,7 +2,7 @@ name: Test
 
 on:
   workflow_dispatch:
-  push: { tags: [ "*" ], branches: [ "main", "develop" ] }
+  push: { tags: [ "*" ], branches: [ "main", "develop", "release/*", "hotfix/*" ] }
 
 jobs:
   build:
