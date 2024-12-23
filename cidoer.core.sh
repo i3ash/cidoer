@@ -110,8 +110,8 @@ define_core_utils() {
   do_stack_trace() {
     local idx filtered_fns=()
     for ((idx = ${#FUNCNAME[@]} - 2; idx > 0; idx--)); do
-      if [ 'do_func_invoke' != "${FUNCNAME[idx]}" ]; then
-        filtered_fns+=("${FUNCNAME[idx]}")
+      if [ 'do_func_invoke' != "${FUNCNAME[$idx]}" ]; then
+        filtered_fns+=("${FUNCNAME[$idx]}")
       fi
     done
     if [ ${#filtered_fns[@]} -gt 0 ]; then

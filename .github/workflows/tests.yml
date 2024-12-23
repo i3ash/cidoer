@@ -76,6 +76,20 @@ jobs:
         run: |
           export HELLO=${{ env.HELLO }}
           bash additional.sh
+      - name: Run Additional Tests on Docker Bash:3.2 Alpine
+        if: startsWith(runner.os, 'Linux')
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace/tests \
+            bash:3.2-alpine3.21 bash additional.sh
+      - name: Run Additional Tests on Docker Bash:4.4 Alpine
+        if: startsWith(runner.os, 'Linux')
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace/tests \
+            bash:4.4-alpine3.21 bash additional.sh
       - name: Run Additional Tests on Docker Debian
         if: startsWith(runner.os, 'Linux')
         run: |
@@ -83,13 +97,6 @@ jobs:
             -v ${{ github.workspace }}:/workspace \
             -w /workspace/tests \
             debian:stable-slim sh -c "apt-get update && apt-get install curl -y && bash additional.sh"
-      - name: Run Additional Tests on Docker Alpine
-        if: startsWith(runner.os, 'Linux')
-        run: |
-          docker run --rm \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace/tests \
-            alpine sh -c "apk add --no-cache bash && bash additional.sh"
       - name: Run Additional Tests on Docker BusyBox
         if: startsWith(runner.os, 'Linux')
         run: |
