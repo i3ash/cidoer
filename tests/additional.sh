@@ -6,7 +6,7 @@ for i in 196 208 226 46 33 45 105 246; do printf '\e[48;5;%sm Color Code %03s \e
 for i in {0..15}; do printf '\e[48;5;%sm %03d \e[0m' "$i" "$i"; done
 printf '\n'
 for i in {0..215}; do
-  printf '\e[48;5;%sm %03d \e[0m' "$((i+16))" "$((i+16))"
+  printf '\e[48;5;%sm %03d \e[0m' "$((i + 16))" "$((i + 16))"
   if [ $(((i + 1) % 36)) -eq 0 ]; then printf '\n'; fi
 done
 for i in {232..255}; do printf '\e[48;5;%sm %03d \e[0m' "$i" "$i"; done
@@ -71,4 +71,11 @@ do_print_dash_pair 'do_os_type' "$(do_os_type)"
 do_print_dash_pair 'do_host_type' "$(do_host_type)"
 
 do_func_invoke do_http_fetch 'https://raw.githubusercontent.com/i3ash/cidoer/refs/heads/main/stable.txt'
-do_func_invoke do_http_fetch 'http://this-domain-does-not-exist.invalid'
+#do_func_invoke do_http_fetch 'http://this-domain-does-not-exist.invalid'
+
+source ../cidoer.ssh.sh
+do_func_invoke do_ssh_check_dependencies
+do_ssh_agent_ensure
+ssh-add -D || do_print_info 'ssh-add -D returned' "$?"
+do_func_invoke do_ssh_add_key "${KEY_01:-}" KEY_01_PASSPHRASE
+ssh-add -l || do_print_info 'ssh-add -l returned' "$?"
