@@ -67,16 +67,18 @@ do_print_dash_pair 'do_git_count_commits_since' "$(do_git_count_commits_since "$
 do_print_dash_pair 'do_git_short_commit_hash' "$(do_git_short_commit_hash)"
 do_print_section do_git
 
+source ../cidoer.ssh.sh
+if do_ssh_agent_ensure; then
+  do_func_invoke do_ssh_check_dependencies
+  #ssh-add -D || do_print_warn 'ssh-add -D returned' "$?"
+  do_func_invoke do_ssh_add_key "${KEY_01:-}" KEY_01_PASSPHRASE
+  do_print_trace ssh-add -l
+  ssh-add -l || do_print_warn 'ssh-add -l returned' "$?"
+  #printf '%q' "$(cat /tmp/id_ed25519)"
+  do_print_section do_ssh
+fi
+
 do_print_dash_pair 'do_os_type' "$(do_os_type)"
 do_print_dash_pair 'do_host_type' "$(do_host_type)"
-
 do_func_invoke do_http_fetch 'https://raw.githubusercontent.com/i3ash/cidoer/refs/heads/main/stable.txt'
 #do_func_invoke do_http_fetch 'http://this-domain-does-not-exist.invalid'
-
-source ../cidoer.ssh.sh
-do_func_invoke do_ssh_check_dependencies
-do_ssh_agent_ensure
-ssh-add -D || do_print_info 'ssh-add -D returned' "$?"
-do_func_invoke do_ssh_add_key "${KEY_01:-}" KEY_01_PASSPHRASE
-ssh-add -l || do_print_info 'ssh-add -l returned' "$?"
-#printf '%q' "$(cat /tmp/id_ed25519)"

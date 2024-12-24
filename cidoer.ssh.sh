@@ -9,27 +9,32 @@ define_ssh_utils() {
     source "${CIDOER_DIR:?}"/cidoer.core.sh
   fi
   do_ssh_check_dependencies() {
-    do_check_optional_cmd ps grep pgrep expect ssh-keygen
-    do_check_required_cmd tr mktemp ssh-agent ssh-add ssh-keyscan
+    do_check_optional_cmd whoami expect ssh-keygen ssh-keyscan
+    do_check_required_cmd mkdir mktemp chmod cat rm tr ssh-agent ssh-add
   }
   do_ssh_agent_ensure() {
-    if command -v pgrep >/dev/null; then
+    if ! command -v ssh-agent >/dev/null 2>&1; then return 127; fi
+    if ! command -v ssh-add >/dev/null 2>&1; then return 127; fi
+    if [ -z "${SSH_AUTH_SOCK:-}" ] || ! ssh-add -l >/dev/null 2>&1; then
       local user
       user="${USER:=$(whoami)}"
-      if ! pgrep -u "$user" ssh-agent >/dev/null 2>&1; then
-        do_print_trace 'Starting ssh-agent...'
-        eval "$(ssh-agent -s)"
-      else
-        do_print_trace 'ssh-agent is already running.'
+      local agent_dir="/tmp/ssh-agent-${user:-}"
+      mkdir -p "$agent_dir"
+      if [[ -f "$agent_dir/ssh-agent.pid" ]]; then
+        local agent_pid
+        agent_pid=$(cat "$agent_dir/ssh-agent.pid")
+        if ! kill -0 "$agent_pid" 2>/dev/null; then
+          do_print_trace "Removing stale ssh-agent files..."
+          rm -f "$agent_dir/ssh-agent.*"
+        fi
       fi
+      do_print_trace "Starting new ssh-agent..."
+      eval "$(ssh-agent -a "$agent_dir/ssh-agent.sock")"
+      printf '%s' "$SSH_AGENT_PID" >"$agent_dir/ssh-agent.pid"
+      declare -rx SSH_AGENT_PID
+      declare -rx SSH_AUTH_SOCK="$agent_dir/ssh-agent.sock"
     else
-      # shellcheck disable=SC2009
-      if ! ps -ef | grep ssh-agent | grep -v grep >/dev/null 2>&1; then
-        do_print_trace 'Starting ssh-agent... ...'
-        eval "$(ssh-agent -s)"
-      else
-        do_print_trace 'ssh-agent is already running...'
-      fi
+      do_print_trace "ssh-agent is already running and accessible."
     fi
   }
   do_ssh_add_key() {
@@ -39,9 +44,9 @@ define_ssh_utils() {
       do_print_warn 'Error: Require private key content.' >&2
       return 1
     fi
-    local temp_dir
-    if [ -d /dev/shm ]; then temp_dir="/dev/shm"; else temp_dir=$(mktemp -d); fi
-    _tmp_file="$temp_dir/_key_file_$$"
+    local key_dir
+    if [ -d /mnt/bin ]; then key_dir="/mnt/bin"; else key_dir=$(mktemp -d); fi
+    _tmp_file="$key_dir/_key_file_$$"
     _cleanup_tmp_file() {
       if ! [ -f "${_tmp_file:-}" ]; then return 0; fi
       rm -f "${_tmp_file}"
@@ -103,9 +108,9 @@ ______expect
       if [ "$rc" -ne 0 ]; then do_print_warn 'Warn: ssh-add failed' >&2; fi
       return "$rc"
     fi
-    local temp_dir
-    if [ -d /dev/shm ]; then temp_dir="/dev/shm"; else temp_dir=$(mktemp -d); fi
-    _askpass_script="$temp_dir/_askpass_script_$$"
+    local bin_dir
+    if [ -d /mnt/bin ]; then bin_dir="/mnt/bin"; else bin_dir=$(mktemp -d); fi
+    _askpass_script="$bin_dir/_askpass_script_$$"
     _cleanup_askpass_script() {
       if ! [ -f "${_askpass_script:-}" ]; then return 0; fi
       rm -f "${_askpass_script}"
@@ -113,11 +118,9 @@ ______expect
       return 0
     }
     trap _cleanup_askpass_script EXIT
-    cat <<____cat >"${_askpass_script:-}"
-#!/usr/bin/env bash
-printf '%s\n' "$pass"
-____cat
+    printf '#!/usr/bin/env bash\n%s\n' "printf '%s\n' \"$pass\"" >"${_askpass_script:-}"
     chmod 500 "$_askpass_script"
+    do_print_trace "ssh-add with SSH_ASKPASS"
     DISPLAY=:0 SSH_ASKPASS="$_askpass_script" ssh-add "$path" </dev/null >/dev/null 2>&1
     rc=$?
     _cleanup_askpass_script
