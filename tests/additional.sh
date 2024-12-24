@@ -79,3 +79,4 @@ do_ssh_agent_ensure
 ssh-add -D || do_print_info 'ssh-add -D returned' "$?"
 do_func_invoke do_ssh_add_key "${KEY_01:-}" KEY_01_PASSPHRASE
 ssh-add -l || do_print_info 'ssh-add -l returned' "$?"
+#printf '%q' "$(cat /tmp/id_ed25519)"

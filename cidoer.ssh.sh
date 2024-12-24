@@ -15,7 +15,7 @@ define_ssh_utils() {
   do_ssh_agent_ensure() {
     if command -v pgrep >/dev/null; then
       local user
-      user="${USER:-$(whoami)}"
+      user="${USER:=$(whoami)}"
       if ! pgrep -u "$user" ssh-agent >/dev/null 2>&1; then
         do_print_trace 'Starting ssh-agent...'
         eval "$(ssh-agent -s)"
@@ -39,7 +39,9 @@ define_ssh_utils() {
       do_print_warn 'Error: Require private key content.' >&2
       return 1
     fi
-    _tmp_file="$(mktemp 2>/dev/null || mktemp -t tmp)"
+    local temp_dir
+    if [ -d /dev/shm ]; then temp_dir="/dev/shm"; else temp_dir=$(mktemp -d); fi
+    _tmp_file="$temp_dir/_key_file_$$"
     _cleanup_tmp_file() {
       if ! [ -f "${_tmp_file:-}" ]; then return 0; fi
       rm -f "${_tmp_file}"
@@ -49,6 +51,7 @@ define_ssh_utils() {
     trap _cleanup_tmp_file EXIT
     key="$(printf '%s' "$key" | tr -d '\r')"
     printf '%b' "$key\n" >"${_tmp_file:-}"
+    chmod 400 "$_tmp_file"
     do_ssh_add_key_file "$_tmp_file" "$passphrase_name"
     local rc=$?
     _cleanup_tmp_file
@@ -97,7 +100,8 @@ define_ssh_utils() {
       exit [lindex \$result 3]
 ______expect
       rc=$?
-      return $rc
+      if [ "$rc" -ne 0 ]; then do_print_warn 'Warn: ssh-add failed' >&2; fi
+      return "$rc"
     fi
     local temp_dir
     if [ -d /dev/shm ]; then temp_dir="/dev/shm"; else temp_dir=$(mktemp -d); fi

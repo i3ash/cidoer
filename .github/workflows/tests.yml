@@ -89,22 +89,28 @@ jobs:
       - name: Run Additional Tests on Docker Alpine
         if: startsWith(runner.os, 'Linux')
         continue-on-error: true
+        env:
+          KEY_01: ${{ secrets.KEY_01 }}
+          KEY_01_PASSPHRASE: ${{ secrets.KEY_01_PASSPHRASE }}
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace/tests \
-            -e KEY_01_PASSPHRASE="${{ secrets.KEY_01_PASSPHRASE }}" \
-            -e KEY_01="$(printf '%q' \"${{ secrets.KEY_01 }}\")" \
+            -e KEY_01_PASSPHRASE="${KEY_01_PASSPHRASE:-}" \
+            -e KEY_01="${KEY_01:-}" \
             alpine sh -c "apk update && apk add bash openssh-client && bash additional.sh"
       - name: Run Additional Tests on Docker Debian
         if: startsWith(runner.os, 'Linux')
         continue-on-error: true
+        env:
+          KEY_01: ${{ secrets.KEY_01 }}
+          KEY_01_PASSPHRASE: ${{ secrets.KEY_01_PASSPHRASE }}
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace/tests \
-            -e KEY_01_PASSPHRASE="${{ secrets.KEY_01_PASSPHRASE }}" \
-            -e KEY_01="$(printf '%q' \"${{ secrets.KEY_01 }}\")" \
+            -e KEY_01_PASSPHRASE="${KEY_01_PASSPHRASE:-}" \
+            -e KEY_01="${KEY_01:-}" \
             debian:stable-slim sh -c "apt-get update && apt-get install curl openssh-client -y && bash additional.sh"
       - name: Run Additional Tests on Docker BusyBox
         if: startsWith(runner.os, 'Linux')
