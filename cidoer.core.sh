@@ -7,8 +7,8 @@ define_core_utils() {
   if declare -F 'do_nothing' >/dev/null; then return 0; fi
   do_nothing() { :; }
   do_check_core_dependencies() {
-    do_check_optional_cmd uname date tput bat git grep sort tail curl wget
-    do_check_required_cmd id hostname printenv tr awk diff
+    do_check_optional_cmd uname date tput bat git grep sort tail curl wget flock lockf
+    do_check_required_cmd id hostname printenv tr awk diff rm rmdir
   }
   do_workflow_job() {
     local job_type
@@ -538,10 +538,99 @@ define_core_utils() {
       return 2
     fi
   }
+  do_lock_try_flock() {
+    local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
+    command -v flock >/dev/null 2>&1 || return 1
+    mkdir -p "$lock_path" 2>/dev/null || return 1
+    { exec 200>"$lock_path/pid"; } 2>/dev/null || return 1
+    if flock -n 200 2>/dev/null; then
+      printf '%s\n' "$$" >"$lock_path/pid"
+      return 0
+    fi
+    { exec 200>&-; } 2>/dev/null
+    return 1
+  }
+  do_lock_try_lockf() {
+    local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
+    command -v lockf >/dev/null 2>&1 || return 1
+    mkdir -p "$lock_path" 2>/dev/null || return 1
+    { exec 201>"$lock_path/pid"; } 2>/dev/null || return 1
+    if lockf -t 0 201 2>/dev/null; then
+      printf '%s\n' "$$" >"$lock_path/pid"
+      return 0
+    fi
+    { exec 201>&-; } 2>/dev/null
+    return 1
+  }
+  do_lock_try_mkdir() {
+    local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
+    if mkdir "$lock_path" 2>/dev/null; then
+      printf '%s\n' "$$" >"$lock_path/pid"
+      return 0
+    fi
+    return 1
+  }
+  do_lock_release() {
+    local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
+    if [ -f "$lock_path/pid" ]; then
+      do_print_trace "Release lock on '${1:-}'"
+      rm -f "$lock_path/pid" || do_print_trace "Failed to remove pid file:" "$lock_path/pid"
+    fi
+    if [ -d "$lock_path" ]; then
+      rmdir "$lock_path" 2>/dev/null || do_print_trace "Failed to remove directory:" "$lock_path"
+    fi
+    { exec 200>&-; } 2>/dev/null
+    { exec 201>&-; } 2>/dev/null
+  }
+  do_lock_acquire() {
+    local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
+    local -r lock_dir="${1:-}"
+    local -i -r max_attempts="${2:-20}"
+    _input_lock_dir="$lock_dir"
+    _lock_release_on_sig() {
+      do_lock_release "${_input_lock_dir:-}"
+    }
+    trap _lock_release_on_sig EXIT INT TERM
+    local -r pid_file="$lock_path/pid"
+    local -i pid attempt=1 lock_acquired=0
+    local -r try_func="do_lock_try_${CIDOER_LOCK_METHOD:-mkdir}"
+    while [ "$attempt" -le "$max_attempts" ] && [ "$lock_acquired" -eq 0 ]; do
+      if [ -d "$lock_path" ] && [ -f "$pid_file" ]; then
+        pid="$(cat "$pid_file" 2>/dev/null)"
+        if [[ "$pid" =~ ^[0-9]+$ ]] && ! kill -0 "$pid" 2>/dev/null; then
+          do_lock_release "${lock_dir:-}"
+        fi
+      fi
+      do_print_trace "Try to lock '$lock_dir' with" "$try_func". "[$attempt/$max_attempts]"
+      if "$try_func" "${lock_dir:-}"; then
+        lock_acquired=1
+        break
+      fi
+      sleep $((attempt < 5 ? 1 : 3))
+      attempt=$((attempt + 1))
+    done
+    [ "$lock_acquired" -eq 1 ] && return 0 || return 1
+  }
 }
 
 declare CIDOER_OS_TYPE=''
 declare CIDOER_HOST_TYPE=''
 declare CIDOER_DEBUG='no'
 declare -a CIDOER_TPUT_COLORS=()
+
+if command -v flock >/dev/null 2>&1; then
+  declare -r CIDOER_LOCK_METHOD="flock"
+elif command -v lockf >/dev/null 2>&1; then
+  declare -r CIDOER_LOCK_METHOD="lockf"
+else
+  declare -r CIDOER_LOCK_METHOD="mkdir"
+fi
+declare -r CIDOER_LOCK_BASE_DIR='/cidoer/locks'
+mkdir -p "/tmp$CIDOER_LOCK_BASE_DIR"
+
 define_core_utils
+if [ "${BASH_VERSINFO:-0}" -lt 3 ] || [ "${BASH_VERSINFO[0]:-0}" -lt 3 ] ||
+  { [ "${BASH_VERSINFO[0]}" -eq 3 ] && [ "${BASH_VERSINFO[1]}" -lt 2 ]; }; then
+  do_print_error 'Error: This script requires Bash 3.2 or newer.' >&2
+  exit 1
+fi
