@@ -15,3 +15,5 @@ printf '\n'
 source ../cidoer.core.sh
 
 /usr/bin/env bash additional.core.sh || do_print_warn 'bash additional.core.sh returned' "$?"
+
+/usr/bin/env bash additional.ssh.sh || do_print_warn 'bash additional.ssh.sh returned' "$?"
