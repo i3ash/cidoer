@@ -70,14 +70,9 @@ jobs:
           source tests/cidoer.sh
           do_workflow_job verify
 
-      - name: Run Additional Tests
-        working-directory: ${{ github.workspace }}/tests
-        shell: bash
-        run: |
-          export HELLO=${{ env.HELLO }}
-          bash additional.sh
       - name: Run Additional Tests on Docker Bash:3.2 Alpine
         if: startsWith(runner.os, 'Linux')
+        continue-on-error: false
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
@@ -85,20 +80,47 @@ jobs:
             bash:3.2-alpine3.21 bash additional.sh
       - name: Run Additional Tests on Docker Bash:4.4 Alpine
         if: startsWith(runner.os, 'Linux')
+        continue-on-error: false
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace/tests \
             bash:4.4-alpine3.21 bash additional.sh
-      - name: Run Additional Tests on Docker Debian
+      - name: Run Additional Tests on Docker Alpine
         if: startsWith(runner.os, 'Linux')
+        continue-on-error: false
+        env:
+          KEY_01: ${{ secrets.KEY_01 }}
+          KEY_01_PASSPHRASE: ${{ secrets.KEY_01_PASSPHRASE }}
+          SSH_HOST_01: ${{ secrets.SSH_HOST_01 }}
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace/tests \
-            debian:stable-slim sh -c "apt-get update && apt-get install curl -y && bash additional.sh"
+            -e KEY_01_PASSPHRASE="${KEY_01_PASSPHRASE:-}" \
+            -e KEY_01="${KEY_01:-}" \
+            -e SSH_HOST_01="${SSH_HOST_01:-}" \
+            --tmpfs /mnt/bin:exec,size=2m \
+            alpine sh -c "apk update && apk add bash openssh-client && bash additional.sh"
+      - name: Run Additional Tests on Docker Debian
+        if: startsWith(runner.os, 'Linux')
+        continue-on-error: false
+        env:
+          KEY_01: ${{ secrets.KEY_01 }}
+          KEY_01_PASSPHRASE: ${{ secrets.KEY_01_PASSPHRASE }}
+          SSH_HOST_01: ${{ secrets.SSH_HOST_01 }}
+        run: |
+          docker run --rm \
+            -v ${{ github.workspace }}:/workspace \
+            -w /workspace/tests \
+            -e KEY_01_PASSPHRASE="${KEY_01_PASSPHRASE:-}" \
+            -e KEY_01="${KEY_01:-}" \
+            -e SSH_HOST_01="${SSH_HOST_01:-}" \
+            --tmpfs /mnt/bin:exec,size=2m \
+            debian:stable-slim sh -c "apt-get update && apt-get install curl openssh-client -y && bash additional.sh"
       - name: Run Additional Tests on Docker BusyBox
         if: startsWith(runner.os, 'Linux')
+        continue-on-error: false
         run: |
           docker run --rm \
             -v /usr/bin/bash:/usr/bin/bash \
@@ -106,6 +128,16 @@ jobs:
             -v ${{ github.workspace }}:/workspace \
             -w /workspace/tests \
             busybox:stable-glibc sh -c "bash additional.sh"
+
+      - name: Run Additional Tests
+        working-directory: ${{ github.workspace }}/tests
+        shell: bash
+        env:
+          HELLO: ${{ env.HELLO }}
+          KEY_01: ${{ secrets.KEY_01 }}
+          KEY_01_PASSPHRASE: ${{ secrets.KEY_01_PASSPHRASE }}
+          SSH_HOST_01: ${{ secrets.SSH_HOST_01 }}
+        run: bash additional.sh
 
       - name: Setup Bats and Bats Libs
         id: setup-bats

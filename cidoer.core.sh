@@ -1,15 +1,23 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2317
-if declare -F 'define_core_utils' >/dev/null; then return 0; fi
-set -eou pipefail
+declare -F 'define_cidoer_utils' >/dev/null && return 0
+set -eu -o pipefail
 
 define_core_utils() {
-  if declare -F 'do_nothing' >/dev/null; then return 0; fi
+  declare -F 'do_workflow_job' >/dev/null && return 0
+  if [ "${BASH_VERSINFO:-0}" -lt 3 ] || [ "${BASH_VERSINFO[0]:-0}" -lt 3 ] ||
+    { [ "${BASH_VERSINFO[0]}" -eq 3 ] && [ "${BASH_VERSINFO[1]}" -lt 2 ]; }; then
+    printf 'Error: This script requires Bash 3.2 or newer.' >&2
+    exit 32
+  fi
+  define_cidoer_core
+  define_cidoer_git
+  define_cidoer_lock
+  define_cidoer_file
+}
+
+define_cidoer_core() {
   do_nothing() { :; }
-  do_check_core_dependencies() {
-    do_check_optional_cmd uname date tput bat git grep sort tail curl wget flock lockf
-    do_check_required_cmd id hostname printenv tr awk diff rm rmdir
-  }
   do_workflow_job() {
     local job_type
     job_type=$(do_trim "$1")
@@ -80,47 +88,6 @@ define_core_utils() {
     CIDOER_HOST_TYPE="$type"
     printf '%s' "$CIDOER_HOST_TYPE"
   }
-  do_git_version_tag() {
-    local cmd
-    for cmd in git grep sort tail; do
-      if ! command -v "$cmd" >/dev/null 2>&1; then
-        do_print_warn 'WARNING: Required command is missing:' " $cmd" >&2
-        return 0
-      fi
-    done
-    local exact latest
-    exact=$(git tag --points-at HEAD 2>/dev/null | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
-    if [ -n "$exact" ]; then
-      printf '%s' "$exact"
-    else
-      latest=$(git tag --merged HEAD 2>/dev/null | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
-      if [ -n "$latest" ]; then printf '%s' "${latest}"; fi
-    fi
-  }
-  do_git_count_commits_since() {
-    if [ ${#} -le 0 ] || [ -z "$1" ]; then
-      printf '%s' "$(git rev-list HEAD --count 2>/dev/null)"
-    else
-      printf '%s' "$(git rev-list "${1}"..HEAD --count 2>/dev/null)"
-    fi
-  }
-  do_git_short_commit_hash() {
-    printf '%s' "$(git rev-parse --short HEAD 2>/dev/null)"
-  }
-  do_stack_trace() {
-    local idx filtered_fns=()
-    for ((idx = ${#FUNCNAME[@]} - 2; idx > 0; idx--)); do
-      if [ 'do_func_invoke' != "${FUNCNAME[$idx]}" ]; then
-        filtered_fns+=("${FUNCNAME[$idx]}")
-      fi
-    done
-    if [ ${#filtered_fns[@]} -gt 0 ]; then
-      printf '%s --> %s\n' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}" "${filtered_fns[*]}"
-    else printf '%s -->\n' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}"; fi
-  }
-  do_time_now() {
-    if command -v date >/dev/null 2>&1; then printf '%s' "$(date +"%Y-%m-%d %T %Z")"; fi
-  }
   do_func_invoke() {
     if [ "$#" -le 0 ] || [ -z "$1" ]; then
       do_print_warn "$(do_stack_trace)" $'$1 (func_name) is required' >&2
@@ -135,11 +102,107 @@ define_core_utils() {
       fi
     else do_print_trace "$(do_stack_trace)" "${func_name} is an absent function" >&2; fi
   }
+  do_core_check_dependencies() {
+    do_check_optional_cmd tput bat git curl wget flock lockf
+    do_check_required_cmd printenv awk diff
+  }
+  do_check_core_dependencies() { do_core_check_dependencies; }
+  do_check_installed() {
+    if [ "$#" -le 0 ] || [ -z "$1" ]; then
+      do_print_warn "$(do_stack_trace)" $'$1 (cmd) is required'
+      return 2
+    fi
+    local cmd="$1" cmd_path
+    cmd_path=$(command -v "${cmd}" 2>/dev/null)
+    if [ -n "${cmd_path}" ] && [ -x "${cmd_path}" ]; then
+      do_print_dash_pair "${cmd}" "${cmd_path}"
+      return 0
+    fi
+    return 1
+  }
+  do_check_optional_cmd() {
+    do_print_dash_pair 'Optional Commands'
+    local cmd
+    for cmd in "${@}"; do
+      if ! do_check_installed "$cmd"; then
+        do_print_dash_pair "${cmd}" ''
+      fi
+    done
+  }
+  do_check_required_cmd() {
+    do_print_dash_pair 'Required Commands'
+    local cmd
+    local missing=0
+    for cmd in "${@}"; do
+      if ! do_check_installed "$cmd"; then
+        do_print_dash_pair "${cmd}" "$(do_tint red missing)"
+        missing=1
+      fi
+    done
+    if [ "$missing" -eq 1 ]; then
+      do_print_error 'Please install the missing required commands and try again later.'
+      return 1
+    fi
+  }
+  do_http_fetch() {
+    local address="${1:?Usage: do_http_fetch <URL> [output]}"
+    local output="${2:-}"
+    local tries="${CIDOER_FETCH_RETRIES:-2}"
+    local waitretry="${CIDOER_FETCH_WAIT_RETRY:-1}"
+    local timeout="${CIDOER_FETCH_TIMEOUT:-20}"
+    if command -v wget >/dev/null 2>&1; then
+      if [ -n "$output" ]; then
+        wget -q --tries="$tries" --timeout="$timeout" -O "$output" "$address" || {
+          do_print_error "$(do_stack_trace)" "Error: wget failed." >&2
+          return 1
+        }
+      else
+        wget -q --tries="$tries" --timeout="$timeout" -O - "$address" || {
+          do_print_error "$(do_stack_trace)" "Error: wget failed." >&2
+          return 1
+        }
+      fi
+    elif command -v curl >/dev/null 2>&1; then
+      if [ -n "$output" ]; then
+        curl -fsSL --retry "$tries" --retry-delay "$waitretry" --max-time "$timeout" "$address" -o "$output" || {
+          do_print_error "$(do_stack_trace)" "Error: curl failed." >&2
+          return 1
+        }
+      else
+        curl -fsSL --retry "$tries" --retry-delay "$waitretry" --max-time "$timeout" "$address" || {
+          do_print_error "$(do_stack_trace)" "Error: curl failed." >&2
+          return 1
+        }
+      fi
+    else
+      do_print_error "$(do_stack_trace)" "Error: Neither 'wget' nor 'curl' is installed." >&2
+      return 2
+    fi
+  }
+  do_print_trace() { printf "%s\n" "$(do_tint blue "${@}")"; }
+  do_print_info() { printf "%s\n" "$(do_tint cyan "${@}")"; }
+  do_print_warn() { printf "%s\n" "$(do_tint yellow "${@}")"; }
+  do_print_error() { printf "%s\n" "$(do_tint bold black on_red "${@}")"; }
+  do_print_colorful() { printf "%s\n" "$(do_tint "${@}")"; }
+  do_time_now() {
+    if command -v date >/dev/null 2>&1; then printf '%s' "$(date +"%Y-%m-%d %T %Z")"; fi
+  }
   do_trim() {
     local var="${1:-}"
     var="${var#"${var%%[![:space:]]*}"}"
     var="${var%"${var##*[![:space:]]}"}"
     printf '%s' "$var"
+  }
+  do_stack_trace() {
+    local idx filtered_fns=()
+    for ((idx = ${#FUNCNAME[@]} - 2; idx > 0; idx--)); do
+      if [ 'do_func_invoke' != "${FUNCNAME[$idx]}" ]; then
+        filtered_fns+=("${FUNCNAME[$idx]}")
+      fi
+    done
+    if [ ${#filtered_fns[@]} -gt 0 ]; then
+      printf '%s --> %s\n' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}" "${filtered_fns[*]}"
+    else printf '%s -->\n' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}"; fi
   }
   do_print_variable() {
     if [ "$#" -le 0 ]; then return 0; fi
@@ -157,11 +220,6 @@ define_core_utils() {
     local trimmed="${value#"${value%%[![:space:]]*}"}"
     printf '%s' "${trimmed%"${trimmed##*[![:space:]]}"}"
   }
-  do_print_trace() { printf "%s\n" "$(do_tint blue "${@}")"; }
-  do_print_info() { printf "%s\n" "$(do_tint cyan "${@}")"; }
-  do_print_warn() { printf "%s\n" "$(do_tint yellow "${@}")"; }
-  do_print_error() { printf "%s\n" "$(do_tint bold black on_red "${@}")"; }
-  do_print_colorful() { printf "%s\n" "$(do_tint "${@}")"; }
   do_print_os_env() {
     local key value
     while IFS='=' read -r key value; do
@@ -243,89 +301,6 @@ define_core_utils() {
     local messages=("${args[@]:$i}")
     if [ ${#messages[@]} -eq 0 ]; then return; fi
     printf "$styles%s$styles_clear" "${messages[*]}"
-  }
-  do_check_installed() {
-    if [ "$#" -le 0 ] || [ -z "$1" ]; then
-      do_print_warn "$(do_stack_trace)" $'$1 (cmd) is required'
-      return 2
-    fi
-    local cmd="$1" cmd_path
-    cmd_path=$(command -v "${cmd}" 2>/dev/null)
-    if [ -n "${cmd_path}" ] && [ -x "${cmd_path}" ]; then
-      do_print_dash_pair "${cmd}" "${cmd_path}"
-      return 0
-    fi
-    return 1
-  }
-  do_check_optional_cmd() {
-    do_print_dash_pair 'Optional Commands'
-    local cmd
-    for cmd in "${@}"; do
-      if ! do_check_installed "$cmd"; then
-        do_print_dash_pair "${cmd}" ''
-      fi
-    done
-  }
-  do_check_required_cmd() {
-    do_print_dash_pair 'Required Commands'
-    local cmd
-    local missing=0
-    for cmd in "${@}"; do
-      if ! do_check_installed "$cmd"; then
-        do_print_dash_pair "${cmd}" "$(do_tint red missing)"
-        missing=1
-      fi
-    done
-    if [ "$missing" -eq 1 ]; then
-      do_print_error 'Please install the missing required commands and try again later.'
-      return 1
-    fi
-  }
-  do_diff() {
-    if ! command -v diff >/dev/null 2>&1; then
-      do_print_error "Command diff is not available."
-      return 3
-    fi
-    if ! command -v awk >/dev/null 2>&1; then
-      do_print_error "Command awk is not available."
-      return 3
-    fi
-    local file1 file2
-    set +u
-    if ! read -r file1 <<<"$(printf '%q' "$1")"; then
-      do_print_error 'Failed to escape file1.'
-      return 3
-    fi
-    if ! read -r file2 <<<"$(printf '%q' "$2")"; then
-      do_print_error 'Failed to escape file2.'
-      return 3
-    fi
-    set -u
-    do_print_trace "$(do_stack_trace)" "<$file1>" "<$file2>"
-    [ ! -f "$file1" ] && file1='/dev/null'
-    [ ! -f "$file2" ] && file2='/dev/null'
-    local color_r color_g reset
-    color_r="$(do_lookup_color red)"
-    color_g="$(do_lookup_color green)"
-    reset="$(do_lookup_color reset)"
-    diff -U0 "$file1" "$file2" | awk "
-      /^@/ {
-        split(\$0, parts,    \" \")
-        split(parts[2], old, \",\")
-        split(parts[3], new, \",\")
-        old_line = substr(old[1], 2)
-        new_line = substr(new[1], 2)
-        next
-      }
-      /^-/  { printf \"$color_r-|%03d| %s$reset\n\", old_line++, substr(\$0,2) }
-      /^\+/ { printf \"$color_g+|%03d| %s$reset\n\", new_line++, substr(\$0,2) }
-    "
-    local diff_status="${PIPESTATUS[0]}"
-    if [ "$diff_status" -ne 0 ] && [ "$diff_status" -ne 1 ]; then
-      do_print_error 'diff command failed with status' "$diff_status"
-      return "$diff_status"
-    fi
-    return "$diff_status"
   }
   do_lookup_color() {
     if [ -z "${CIDOER_TPUT_COLORS:-}" ]; then return 0; fi
@@ -411,6 +386,145 @@ define_core_utils() {
     fi
   }
   do_reset_tput
+}
+
+define_cidoer_lock() {
+  declare -F 'do_lock_release' >/dev/null && return 0
+  [ -z "${CIDOER_LOCK_BASE_DIR:-}" ] && {
+    CIDOER_LOCK_BASE_DIR='/cidoer/locks'
+    mkdir -p "/tmp$CIDOER_LOCK_BASE_DIR"
+  }
+  [ -z "${CIDOER_LOCK_METHOD:-}" ] && {
+    if command -v flock >/dev/null 2>&1; then
+      CIDOER_LOCK_METHOD="flock"
+    elif command -v lockf >/dev/null 2>&1; then
+      CIDOER_LOCK_METHOD="lockf"
+    else
+      CIDOER_LOCK_METHOD="mkdir"
+    fi
+  }
+  do_lock_release() {
+    local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
+    if [ -f "$lock_path/pid" ]; then
+      do_print_trace "Release lock on '${1:-}'"
+      rm -f "$lock_path/pid" || do_print_trace "Failed to remove pid file:" "$lock_path/pid"
+    fi
+    if [ -d "$lock_path" ]; then
+      rmdir "$lock_path" 2>/dev/null || do_print_trace "Failed to remove directory:" "$lock_path"
+    fi
+    { exec 200>&-; } 2>/dev/null
+    { exec 201>&-; } 2>/dev/null
+  }
+  do_lock_acquire() {
+    local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
+    local -r lock_dir="${1:-}"
+    local -i -r max_attempts="${2:-20}"
+    _input_lock_dir="$lock_dir"
+    _lock_release_on_sig() {
+      do_lock_release "${_input_lock_dir:-}"
+    }
+    trap _lock_release_on_sig EXIT INT TERM
+    local -r pid_file="$lock_path/pid"
+    local -i pid attempt=1 lock_acquired=0
+    local -r try_func="do_lock_try_${CIDOER_LOCK_METHOD:-mkdir}"
+    while [ "$attempt" -le "$max_attempts" ] && [ "$lock_acquired" -eq 0 ]; do
+      if [ -d "$lock_path" ] && [ -f "$pid_file" ]; then
+        pid="$(cat "$pid_file" 2>/dev/null)"
+        if [[ "$pid" =~ ^[0-9]+$ ]] && ! kill -0 "$pid" 2>/dev/null; then
+          do_lock_release "${lock_dir:-}"
+        fi
+      fi
+      do_print_trace "Try to lock '$lock_dir' with" "$try_func". "[$attempt/$max_attempts]"
+      if "$try_func" "${lock_dir:-}"; then
+        lock_acquired=1
+        break
+      fi
+      sleep $((attempt < 5 ? 1 : 3))
+      attempt=$((attempt + 1))
+    done
+    [ "$lock_acquired" -eq 1 ] && return 0 || return 1
+  }
+  do_lock_try_flock() {
+    local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
+    command -v flock >/dev/null 2>&1 || return 1
+    mkdir -p "$lock_path" 2>/dev/null || return 1
+    { exec 200>"$lock_path/pid"; } 2>/dev/null || return 1
+    if flock -n 200 2>/dev/null; then
+      printf '%s\n' "$$" >"$lock_path/pid"
+      return 0
+    fi
+    { exec 200>&-; } 2>/dev/null
+    return 1
+  }
+  do_lock_try_lockf() {
+    local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
+    command -v lockf >/dev/null 2>&1 || return 1
+    mkdir -p "$lock_path" 2>/dev/null || return 1
+    { exec 201>"$lock_path/pid"; } 2>/dev/null || return 1
+    if lockf -t 0 201 2>/dev/null; then
+      printf '%s\n' "$$" >"$lock_path/pid"
+      return 0
+    fi
+    { exec 201>&-; } 2>/dev/null
+    return 1
+  }
+  do_lock_try_mkdir() {
+    local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
+    if mkdir "$lock_path" 2>/dev/null; then
+      printf '%s\n' "$$" >"$lock_path/pid"
+      return 0
+    fi
+    return 1
+  }
+}
+
+define_cidoer_file() {
+  do_diff() {
+    if ! command -v diff >/dev/null 2>&1; then
+      do_print_error "Command diff is not available."
+      return 3
+    fi
+    if ! command -v awk >/dev/null 2>&1; then
+      do_print_error "Command awk is not available."
+      return 3
+    fi
+    local file1 file2
+    set +u
+    if ! read -r file1 <<<"$(printf '%q' "$1")"; then
+      do_print_error 'Failed to escape file1.'
+      return 3
+    fi
+    if ! read -r file2 <<<"$(printf '%q' "$2")"; then
+      do_print_error 'Failed to escape file2.'
+      return 3
+    fi
+    set -u
+    do_print_trace "$(do_stack_trace)" "<$file1>" "<$file2>"
+    [ ! -f "$file1" ] && file1='/dev/null'
+    [ ! -f "$file2" ] && file2='/dev/null'
+    local color_r color_g reset
+    color_r="$(do_lookup_color red)"
+    color_g="$(do_lookup_color green)"
+    reset="$(do_lookup_color reset)"
+    diff -U0 "$file1" "$file2" | awk "
+      /^@/ {
+        split(\$0, parts,    \" \")
+        split(parts[2], old, \",\")
+        split(parts[3], new, \",\")
+        old_line = substr(old[1], 2)
+        new_line = substr(new[1], 2)
+        next
+      }
+      /^-/  { printf \"$color_r-|%03d| %s$reset\n\", old_line++, substr(\$0,2) }
+      /^\+/ { printf \"$color_g+|%03d| %s$reset\n\", new_line++, substr(\$0,2) }
+    "
+    local diff_status="${PIPESTATUS[0]}"
+    if [ "$diff_status" -ne 0 ] && [ "$diff_status" -ne 1 ]; then
+      do_print_error 'diff command failed with status' "$diff_status"
+      return "$diff_status"
+    fi
+    return "$diff_status"
+  }
   do_replace() {
     local found_ok='false' found_value=''
     _find_value() {
@@ -503,134 +617,43 @@ define_core_utils() {
     done
     _replace "$open_char" "$close_char"
   }
-  do_http_fetch() {
-    local address="${1:?Usage: do_http_fetch <URL> [output]}"
-    local output="${2:-}"
-    local tries="${CIDOER_FETCH_RETRIES:-2}"
-    local waitretry="${CIDOER_FETCH_WAIT_RETRY:-1}"
-    local timeout="${CIDOER_FETCH_TIMEOUT:-20}"
-    if command -v wget >/dev/null 2>&1; then
-      if [ -n "$output" ]; then
-        wget -q --tries="$tries" --timeout="$timeout" -O "$output" "$address" || {
-          do_print_error "$(do_stack_trace)" "Error: wget failed." >&2
-          return 1
-        }
-      else
-        wget -q --tries="$tries" --timeout="$timeout" -O - "$address" || {
-          do_print_error "$(do_stack_trace)" "Error: wget failed." >&2
-          return 1
-        }
+}
+
+define_cidoer_git() {
+  do_git_version_tag() {
+    local cmd
+    for cmd in git grep sort tail; do
+      if ! command -v "$cmd" >/dev/null 2>&1; then
+        do_print_warn 'WARNING: Required command is missing:' " $cmd" >&2
+        return 0
       fi
-    elif command -v curl >/dev/null 2>&1; then
-      if [ -n "$output" ]; then
-        curl -fsSL --retry "$tries" --retry-delay "$waitretry" --max-time "$timeout" "$address" -o "$output" || {
-          do_print_error "$(do_stack_trace)" "Error: curl failed." >&2
-          return 1
-        }
-      else
-        curl -fsSL --retry "$tries" --retry-delay "$waitretry" --max-time "$timeout" "$address" || {
-          do_print_error "$(do_stack_trace)" "Error: curl failed." >&2
-          return 1
-        }
-      fi
-    else
-      do_print_error "$(do_stack_trace)" "Error: Neither 'wget' nor 'curl' is installed." >&2
-      return 2
-    fi
-  }
-  do_lock_try_flock() {
-    local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
-    command -v flock >/dev/null 2>&1 || return 1
-    mkdir -p "$lock_path" 2>/dev/null || return 1
-    { exec 200>"$lock_path/pid"; } 2>/dev/null || return 1
-    if flock -n 200 2>/dev/null; then
-      printf '%s\n' "$$" >"$lock_path/pid"
-      return 0
-    fi
-    { exec 200>&-; } 2>/dev/null
-    return 1
-  }
-  do_lock_try_lockf() {
-    local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
-    command -v lockf >/dev/null 2>&1 || return 1
-    mkdir -p "$lock_path" 2>/dev/null || return 1
-    { exec 201>"$lock_path/pid"; } 2>/dev/null || return 1
-    if lockf -t 0 201 2>/dev/null; then
-      printf '%s\n' "$$" >"$lock_path/pid"
-      return 0
-    fi
-    { exec 201>&-; } 2>/dev/null
-    return 1
-  }
-  do_lock_try_mkdir() {
-    local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
-    if mkdir "$lock_path" 2>/dev/null; then
-      printf '%s\n' "$$" >"$lock_path/pid"
-      return 0
-    fi
-    return 1
-  }
-  do_lock_release() {
-    local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
-    if [ -f "$lock_path/pid" ]; then
-      do_print_trace "Release lock on '${1:-}'"
-      rm -f "$lock_path/pid" || do_print_trace "Failed to remove pid file:" "$lock_path/pid"
-    fi
-    if [ -d "$lock_path" ]; then
-      rmdir "$lock_path" 2>/dev/null || do_print_trace "Failed to remove directory:" "$lock_path"
-    fi
-    { exec 200>&-; } 2>/dev/null
-    { exec 201>&-; } 2>/dev/null
-  }
-  do_lock_acquire() {
-    local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
-    local -r lock_dir="${1:-}"
-    local -i -r max_attempts="${2:-20}"
-    _input_lock_dir="$lock_dir"
-    _lock_release_on_sig() {
-      do_lock_release "${_input_lock_dir:-}"
-    }
-    trap _lock_release_on_sig EXIT INT TERM
-    local -r pid_file="$lock_path/pid"
-    local -i pid attempt=1 lock_acquired=0
-    local -r try_func="do_lock_try_${CIDOER_LOCK_METHOD:-mkdir}"
-    while [ "$attempt" -le "$max_attempts" ] && [ "$lock_acquired" -eq 0 ]; do
-      if [ -d "$lock_path" ] && [ -f "$pid_file" ]; then
-        pid="$(cat "$pid_file" 2>/dev/null)"
-        if [[ "$pid" =~ ^[0-9]+$ ]] && ! kill -0 "$pid" 2>/dev/null; then
-          do_lock_release "${lock_dir:-}"
-        fi
-      fi
-      do_print_trace "Try to lock '$lock_dir' with" "$try_func". "[$attempt/$max_attempts]"
-      if "$try_func" "${lock_dir:-}"; then
-        lock_acquired=1
-        break
-      fi
-      sleep $((attempt < 5 ? 1 : 3))
-      attempt=$((attempt + 1))
     done
-    [ "$lock_acquired" -eq 1 ] && return 0 || return 1
+    local exact latest
+    exact=$(git tag --points-at HEAD 2>/dev/null | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
+    if [ -n "$exact" ]; then
+      printf '%s' "$exact"
+    else
+      latest=$(git tag --merged HEAD 2>/dev/null | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
+      if [ -n "$latest" ]; then printf '%s' "${latest}"; fi
+    fi
+  }
+  do_git_count_commits_since() {
+    if [ ${#} -le 0 ] || [ -z "$1" ]; then
+      printf '%s' "$(git rev-list HEAD --count 2>/dev/null)"
+    else
+      printf '%s' "$(git rev-list "${1}"..HEAD --count 2>/dev/null)"
+    fi
+  }
+  do_git_short_commit_hash() {
+    printf '%s' "$(git rev-parse --short HEAD 2>/dev/null)"
   }
 }
 
-declare CIDOER_OS_TYPE=''
-declare CIDOER_HOST_TYPE=''
 declare CIDOER_DEBUG='no'
 declare -a CIDOER_TPUT_COLORS=()
-
-if command -v flock >/dev/null 2>&1; then
-  declare -r CIDOER_LOCK_METHOD="flock"
-elif command -v lockf >/dev/null 2>&1; then
-  declare -r CIDOER_LOCK_METHOD="lockf"
-else
-  declare -r CIDOER_LOCK_METHOD="mkdir"
-fi
-declare -r CIDOER_LOCK_BASE_DIR='/cidoer/locks'
-mkdir -p "/tmp$CIDOER_LOCK_BASE_DIR"
+declare CIDOER_OS_TYPE=''
+declare CIDOER_HOST_TYPE=''
+declare CIDOER_LOCK_BASE_DIR=''
+declare CIDOER_LOCK_METHOD=''
 
 define_core_utils
-if [ "${BASH_VERSINFO:-0}" -lt 3 ] || [ "${BASH_VERSINFO[0]:-0}" -lt 3 ] ||
-  { [ "${BASH_VERSINFO[0]}" -eq 3 ] && [ "${BASH_VERSINFO[1]}" -lt 2 ]; }; then
-  do_print_error 'Error: This script requires Bash 3.2 or newer.' >&2
-  exit 1
-fi
