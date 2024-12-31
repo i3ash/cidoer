@@ -151,4 +151,9 @@ jobs:
       - name: Run Bats Tests
         working-directory: ${{ github.workspace }}/tests
         shell: bash
-        run: bats ./
+        run: |
+          source "${CIDOER_CORE_FILE:?}"
+          eval "$(ssh-agent -s)" > /dev/null 2>&1
+          do_print_dash_pair 'SSH_AGENT_PID' "$SSH_AGENT_PID"
+          do_print_dash_pair 'SSH_AUTH_SOCK' "$SSH_AUTH_SOCK"
+          bats ./
