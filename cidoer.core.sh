@@ -24,7 +24,6 @@ define_cidoer_core() {
       do_print_warn "$(do_stack_trace)" $'$1 (job_type) is invalid:' "'${1:-}'" >&2
       return 1
     }
-    local -i cnt=0
     local -a steps=()
     local arg step
     for arg in "${@:2}"; do
@@ -34,13 +33,12 @@ define_cidoer_core() {
         return 1
       }
       steps+=("$step")
-      cnt=$((cnt + 1))
     done
     local -r upper=$(printf '%s' "$job_type" | tr '[:lower:]' '[:upper:]')
     local -r lower=$(printf '%s' "$job_type" | tr '[:upper:]' '[:lower:]')
     do_print_section "${upper} JOB BEGIN"
     do_func_invoke "define_${lower}" || return $?
-    if [ $cnt -eq 0 ]; then
+    if [ ${#steps[@]} -le 0 ]; then
       do_func_invoke "${lower}_do" || return $?
     else
       for step in "${steps[@]}"; do
