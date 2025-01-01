@@ -215,18 +215,16 @@ define_cidoer_core() {
     else printf '%s -->\n' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}"; fi
   }
   do_print_variable() {
-    if [ "$#" -le 0 ]; then return 0; fi
-    local prefix="$1" name="$2" suffix="$3"
-    local candidates=(
+    [ "$#" -le 0 ] && return 0
+    local -r prefix="$1" name="$2" suffix="$3"
+    local -ra candidates=(
       "${prefix}${name}${suffix}" "${prefix}${name}" "${name}${suffix}" "${name}"
     )
     local value='' candidate=''
-    set +u
     for candidate in "${candidates[@]}"; do
       value="${!candidate}"
-      if [ -n "$value" ]; then break; fi
+      [ -n "$value" ] && break
     done
-    set -u
     local trimmed="${value#"${value%%[![:space:]]*}"}"
     printf '%s' "${trimmed%"${trimmed##*[![:space:]]}"}"
   }
