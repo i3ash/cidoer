@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2317
-declare -F 'define_cidoer_utils' >/dev/null && return 0
+declare -F 'define_cidoer_core' >/dev/null && return 0
 set -eu -o pipefail
 
 define_core_utils() {
@@ -497,16 +497,14 @@ define_cidoer_file() {
       return 3
     fi
     local file1 file2
-    set +u
-    if ! read -r file1 <<<"$(printf '%q' "$1")"; then
+    if ! read -r file1 <<<"$(printf '%q' "${1:-}")"; then
       do_print_error 'Failed to escape file1.'
       return 3
     fi
-    if ! read -r file2 <<<"$(printf '%q' "$2")"; then
+    if ! read -r file2 <<<"$(printf '%q' "${2:-}")"; then
       do_print_error 'Failed to escape file2.'
       return 3
     fi
-    set -u
     do_print_trace "$(do_stack_trace)" "<$file1>" "<$file2>"
     [ ! -f "$file1" ] && file1='/dev/null'
     [ ! -f "$file2" ] && file2='/dev/null'
