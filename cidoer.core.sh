@@ -19,28 +19,52 @@ define_core_utils() {
 define_cidoer_core() {
   do_nothing() { :; }
   do_workflow_job() {
-    local job_type
-    job_type=$(do_trim "$1")
-    if ! [[ "$job_type" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
-      do_print_warn "$(do_stack_trace)" $'$1 (job_type) is not a valid format'
+    local -r job_type=$(do_trim "${1:-}")
+    [[ "${job_type:-}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] || {
+      do_print_warn "$(do_stack_trace)" $'$1 (job_type) is invalid:' "'${1:-}'" >&2
       return 1
-    fi
-    local upper lower
-    upper=$(printf '%s' "$job_type" | tr '[:lower:]' '[:upper:]')
-    lower=$(printf '%s' "$job_type" | tr '[:upper:]' '[:lower:]')
-    do_print_section "${upper} JOB BEGIN"
-    do_func_invoke "define_${lower}"
-    local args=("$@")
-    local arg step i=0
-    for arg in "${args[@]:1}"; do
+    }
+    local -i cnt=0
+    local -a steps=()
+    local arg step
+    for arg in "${@:2}"; do
       step=$(do_trim "$arg")
-      if [[ -n "$step" ]] && [[ "$step" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]]; then
-        do_func_invoke "${lower}_${step}"
-        i=$((i + 1))
-      fi
+      [[ "${step:-}" =~ ^[a-zA-Z0-9_]*$ ]] || {
+        do_print_warn "$(do_stack_trace)" "step name of '${job_type:-}' is invalid:" "'${step:-}'" >&2
+        return 1
+      }
+      steps+=("$step")
+      cnt=$((cnt + 1))
     done
-    if [ $i -eq 0 ]; then do_func_invoke "${lower}_do"; fi
+    local -r upper=$(printf '%s' "$job_type" | tr '[:lower:]' '[:upper:]')
+    local -r lower=$(printf '%s' "$job_type" | tr '[:upper:]' '[:lower:]')
+    do_print_section "${upper} JOB BEGIN"
+    do_func_invoke "define_${lower}" || return $?
+    if [ $cnt -eq 0 ]; then
+      do_func_invoke "${lower}_do" || return $?
+    else
+      for step in "${steps[@]}"; do
+        do_func_invoke "${lower}_${step}" || return $?
+      done
+    fi
     do_print_section "${upper} JOB DONE!" && printf '\n'
+  }
+  do_func_invoke() {
+    if [ "$#" -le 0 ] || [ -z "$1" ]; then
+      do_print_warn "$(do_stack_trace)" $'$1 (func_name) is required' >&2
+      return 0
+    fi
+    local -r func_name="${1:-}"
+    declare -F "$func_name" >/dev/null || {
+      do_print_trace "$(do_stack_trace)" "$func_name is an absent function" >&2
+      return 0
+    }
+    "${@}" || local -r exit_code=$?
+    [ "${exit_code:-0}" -eq 0 ] && return 0
+    do_print_warn "$(do_stack_trace)" "$func_name failed with exit code $exit_code" >&2
+    local -r error_hook_do="${func_name}_on_error"
+    declare -F "$error_hook_do" >/dev/null || return "$exit_code"
+    "$error_hook_do" "$exit_code" || return $?
   }
   do_os_type() {
     if [ -n "${CIDOER_OS_TYPE:-}" ]; then
@@ -87,20 +111,6 @@ define_cidoer_core() {
     esac
     CIDOER_HOST_TYPE="$type"
     printf '%s' "$CIDOER_HOST_TYPE"
-  }
-  do_func_invoke() {
-    if [ "$#" -le 0 ] || [ -z "$1" ]; then
-      do_print_warn "$(do_stack_trace)" $'$1 (func_name) is required' >&2
-      return 0
-    fi
-    local func_name="${1}"
-    if declare -F "${func_name}" >/dev/null; then
-      local exit_code=0
-      "${@}" || exit_code=$?
-      if [ "${exit_code}" -ne 0 ]; then
-        do_print_warn "$(do_stack_trace)" "${func_name} failed with exit code ${exit_code}" >&2
-      fi
-    else do_print_trace "$(do_stack_trace)" "${func_name} is an absent function" >&2; fi
   }
   do_core_check_dependencies() {
     do_check_optional_cmd tput bat git curl wget flock lockf
@@ -649,8 +659,8 @@ define_cidoer_git() {
   }
 }
 
-declare CIDOER_DEBUG='no'
 declare -a CIDOER_TPUT_COLORS=()
+declare CIDOER_DEBUG='no'
 declare CIDOER_OS_TYPE=''
 declare CIDOER_HOST_TYPE=''
 declare CIDOER_LOCK_BASE_DIR=''

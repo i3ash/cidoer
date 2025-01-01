@@ -17,7 +17,10 @@ define_upload() {
 define_deploy() {
   deploy_do() {
     do_print_trace "$(do_stack_trace)" ': Acceptable Failure'
-    return 1
+    return 120
+  }
+  deploy_do_on_error() {
+    do_print_trace "$(do_stack_trace)" "${1:?}"
   }
 }
 

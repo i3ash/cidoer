@@ -29,10 +29,10 @@ do_check_core_dependencies
 do_print_dash_pair
 do_print_section
 
-do_func_invoke do_lookup_color
-do_func_invoke do_check_installed hello
-do_func_invoke do_check_installed
-do_func_invoke do_check_required_cmd hello whoami
+do_func_invoke do_lookup_color || do_print_info 'do_lookup_color returned' "$?"
+do_func_invoke do_check_installed hello || do_print_info 'do_check_installed returned' "$?"
+do_func_invoke do_check_installed || do_print_info 'do_check_installed returned' "$?"
+do_func_invoke do_check_required_cmd hello whoami || do_print_error 'do_check_required_cmd returned' "$?"
 do_func_invoke do_abc
 do_func_invoke do_func_invoke do_abc
 do_func_invoke do_func_invoke do_func_invoke do_abc

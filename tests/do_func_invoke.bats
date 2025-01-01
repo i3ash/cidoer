@@ -38,6 +38,22 @@ teardown() { :; }
 @test "do_func_invoke | Handles failed function" {
   mock_failure_func() { return 99; }
   run do_func_invoke mock_failure_func arg1 arg2
-  [[ "$status" == 0 ]]
+  [[ "$status" == 99 ]]
   [[ "$output" == *"mock_failure_func failed with exit code 99"* ]]
+}
+
+@test "do_func_invoke | Handles failed function recovery" {
+  mock_func_1() { return 120; }
+  mock_func_1_on_error() { return 0; }
+  run do_func_invoke mock_func_1 arg1 arg2
+  [[ "$status" == 0 ]]
+  [[ "$output" == *"mock_func_1 failed with exit code 120"* ]]
+}
+
+@test "do_func_invoke | Handles failed function stay failed" {
+  mock_func_2() { return 119; }
+  mock_func_2_on_error() { return "${1:?}"; }
+  run do_func_invoke mock_func_2 arg1 arg2
+  [[ "$status" == 119 ]]
+  [[ "$output" == *"mock_func_2 failed with exit code 119"* ]]
 }
