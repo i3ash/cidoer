@@ -448,21 +448,29 @@ define_cidoer_file() {
   do_file_replace() {
     local found_ok='false' found_value=''
     _find_value() {
-      local key="$1" i
+      local key="${1:-}"
+      local -i i
       found_ok='false'
       while [ "${key:0:1}" = '$' ]; do key="${key:1}"; done
+      [[ "$key" =~ ^[a-zA-Z_-][a-zA-Z0-9_-]*$ ]] || {
+        found_ok='false'
+        return 0
+      }
       for ((i = 0; i < ${#map_keys[@]}; i++)); do
         [ "$key" = "${map_keys[i]}" ] && {
-          found_value="${map_vals[i]}"
+          found_value="${map_vals[$i]}"
           found_ok='true'
           return 0
         }
       done
-      _find_var "$1"
+      _find_var "$key"
     }
     _find_var() {
-      local key="$1"
-      while [ "${key:0:1}" = '$' ]; do key="${key:1}"; done
+      local -r key="${1:-}"
+      [[ "$key" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] || {
+        found_ok='false'
+        return 0
+      }
       if [ -z "${!key+x}" ]; then
         found_ok='false'
       elif [ -z "${!key}" ]; then
