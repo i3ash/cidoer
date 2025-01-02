@@ -2,13 +2,6 @@
 
 load ../cidoer.core.sh
 
-setup() {
-  set +u
-}
-teardown() {
-  set -u
-}
-
 @test "do_print_variable | Prints the value of a variable without prefix or suffix" {
   local VAR='value0'
   run do_print_variable 'VAR'

@@ -127,11 +127,11 @@ define_cidoer_core() {
   do_print_error() { do_tint bold black on_red "${@}"; }
   do_print_variable() {
     [ "$#" -le 0 ] && return 0
-    local -r prefix="$1" name="$2" suffix="$3"
+    local -r prefix="${1:-}" name="${2:-}" suffix="${3:-}"
     local -ra candidates=("${prefix}${name}${suffix}" "${prefix}${name}" "${name}${suffix}" "${name}")
     local value='' candidate=''
     for candidate in "${candidates[@]}"; do
-      value="${!candidate}"
+      value="${!candidate:-}"
       [ -n "$value" ] && break
     done
     local -r trimmed="${value#"${value%%[![:space:]]*}"}"
