@@ -2,13 +2,12 @@
 set -eu -o pipefail
 
 source ../cidoer.core.sh
-#CIDOER_DEBUG='yes'
 #CIDOER_TPUT_COLORS=()
-if [ ${#CIDOER_TPUT_COLORS} -gt 0 ]; then
+[ ${#CIDOER_TPUT_COLORS[@]} -gt 0 ] && {
   for line in "${CIDOER_TPUT_COLORS[@]}"; do
     printf "${line#*=}+++ ${line%%=*} +++$(do_lookup_color reset)%s\n"
   done
-fi
+}
 
 do_stack_trace
 do_print_section 'do_print_section'
@@ -22,11 +21,13 @@ do_tint '\033[38;5;46m' 'do_tint with ANSI escape sequences 8-bit'
 do_tint '\e[48;2;255;255;100m' '\e[38;5;21m' 'do_tint with ANSI escape sequences 24-bit'
 
 do_print_code_bash_fn 'do_nothing' 'do_workflow_job' 'do_func_invoke'
-do_print_debug bash "$(declare -f define_core_utils)"
 do_print_dash_pair 'HELLO' "${HELLO:-}"
 do_print_dash_pair 'do_print_dash_pair' ''
 #do_print_dash_pair 'do_print_os_env' ''
 #do_print_os_env
+CIDOER_DEBUG='yes'
+do_print_debug bash "$(declare -f define_core_utils)"
+CIDOER_DEBUG='no'
 do_print_section
 
 do_core_check_dependencies

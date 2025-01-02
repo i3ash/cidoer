@@ -5,8 +5,9 @@ set -eu -o pipefail
 
 define_core_utils() {
   declare -F 'do_workflow_job' >/dev/null && return 0
-  if [ "${BASH_VERSINFO:-0}" -lt 3 ] || [ "${BASH_VERSINFO[0]:-0}" -lt 3 ] ||
-    { [ "${BASH_VERSINFO[0]}" -eq 3 ] && [ "${BASH_VERSINFO[1]}" -lt 2 ]; }; then
+  if [ "${BASH_VERSINFO:-0}" -lt 3 ] || [ "${BASH_VERSINFO[0]:-0}" -lt 3 ] || {
+    [ "${BASH_VERSINFO[0]}" -eq 3 ] && [ "${BASH_VERSINFO[1]}" -lt 2 ]
+  }; then
     printf 'Error: This script requires Bash 3.2 or newer.' >&2
     exit 32
   fi
@@ -120,10 +121,10 @@ define_cidoer_core() {
       printf '%s --> %s\n' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}" "${filtered_fns[*]}"
     else printf '%s -->\n' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}"; fi
   }
-  do_print_trace() { printf "%s\n" "$(do_tint blue "${@}")"; }
-  do_print_info() { printf "%s\n" "$(do_tint cyan "${@}")"; }
-  do_print_warn() { printf "%s\n" "$(do_tint yellow "${@}")"; }
-  do_print_error() { printf "%s\n" "$(do_tint bold black on_red "${@}")"; }
+  do_print_trace() { do_tint blue "${@}"; }
+  do_print_info() { do_tint cyan "${@}"; }
+  do_print_warn() { do_tint yellow "${@}"; }
+  do_print_error() { do_tint bold black on_red "${@}"; }
   do_print_variable() {
     [ "$#" -le 0 ] && return 0
     local -r prefix="$1" name="$2" suffix="$3"
@@ -144,23 +145,24 @@ define_cidoer_core() {
   }
   do_print_dash_pair() {
     local -r dashes='------------------------------------'
-    if [ ${#} -gt 1 ]; then
-      printf "%s %s [%s]\n" "$(do_tint green "${1}")" \
-        "$(do_tint white "${dashes:${#1}}")" "$(do_tint green "${2}")"
-    elif [ ${#} -gt 0 ]; then
+    [ ${#} -gt 1 ] && {
+      printf "%s %s [%s]\n" "$(do_tint green "${1}")" "$(do_tint white "${dashes:${#1}}")" "$(do_tint green "${2}")"
+      return 0
+    }
+    [ ${#} -gt 0 ] && {
       printf "%s < %s >\n" "$(do_tint white "${dashes}-")" "$(do_tint white "${1}")"
-    else
-      printf "%s\n" "$(do_tint white "${dashes}${dashes}")"
-    fi
+      return 0
+    }
+    do_tint white "${dashes}${dashes}"
   }
   do_print_section() {
     local -r line='==============================================================================='
     [ ${#} -le 0 ] && {
-      printf "%s\n" "$(do_tint bold cyan "=${line} $(do_time_now)")"
+      do_tint bold cyan "=${line} $(do_time_now)"
       return 0
     }
     local -r title=$(do_trim "${*}")
-    [ -n "${title}" ] && printf "%s\n" "$(do_tint bold cyan "${title} ${line:${#title}} $(do_time_now)")"
+    [ -n "${title}" ] && do_tint bold cyan "${title} ${line:${#title}} $(do_time_now)"
   }
   do_print_debug() {
     [ "${CIDOER_DEBUG:-no}" != "yes" ] && return 0
@@ -168,35 +170,34 @@ define_cidoer_core() {
   }
   do_print_code_bash_fn() { do_print_code_bash "$(declare -f "$@")"; }
   do_print_code_bash() {
-    if command -v bat >/dev/null 2>&1 && [ -n "${CIDOER_TPUT_COLORS:-}" ]; then
+    [ ${#CIDOER_TPUT_COLORS[@]} -gt 0 ] && command -v bat >/dev/null 2>&1 && {
       do_print_code_lines 'bash' "$@"
-    else do_print_code_lines "$@"; fi
+      return 0
+    }
+    do_print_code_lines "$@"
   }
   do_print_code_lines() {
     [ "$#" -le 0 ] && return 0
     local -r stack="$(do_stack_trace)"
-    printf "%s\n" "$(do_tint magenta '#---|--------------------' "${stack}")"
-    command -v bat >/dev/null 2>&1 && [ -n "${CIDOER_TPUT_COLORS:-}" ] && {
-      local lang="$1"
-      shift
-      local code_block="$*"
+    do_tint magenta '#---|--------------------' "${stack}"
+    [ ${#CIDOER_TPUT_COLORS[@]} -gt 0 ] && command -v bat >/dev/null 2>&1 && {
+      local -r lang="$1" && shift
+      local -r code_block="$*"
       bat --language "$lang" --paging never --number <<<"${code_block}"
+      do_tint magenta '#---|--------------------' "${stack}"
       return 0
     }
     local arg line i=1
     for arg in "$@"; do
       while IFS= read -r line; do
-        printf "%s\n" "$(do_tint magenta "$(printf '#%3d|' "$i")" "$line")"
+        do_tint magenta "$(printf '#%3d|' "$i")" "$line"
         i=$((i + 1))
       done <<<"$arg"
     done
-    printf "%s\n" "$(do_tint magenta '#---|--------------------' "${stack}")"
+    do_tint magenta '#---|--------------------' "${stack}"
   }
-  declare -x _CIDOER_TPUT_COLORS_CLEAR
   do_tint() {
     [ "$#" -le 0 ] && return 0
-    [ -z "${_CIDOER_TPUT_COLORS_CLEAR:-}" ] && _CIDOER_TPUT_COLORS_CLEAR=$(do_lookup_color reset)
-    local -r styles_clear="${_CIDOER_TPUT_COLORS_CLEAR}"
     local -ra args=("$@")
     local code i=0 styles=''
     while [ "$i" -lt "${#args[@]}" ]; do
@@ -217,10 +218,17 @@ define_cidoer_core() {
     done
     local -ra messages=("${args[@]:$i}")
     [ ${#messages[@]} -eq 0 ] && return 0
+    [ -z "$styles" ] && {
+      printf "%s\n" "${messages[*]}"
+      return 0
+    }
+    [ -z "${_CIDOER_TPUT_COLORS_CLEAR:-}" ] && _CIDOER_TPUT_COLORS_CLEAR=$(do_lookup_color reset)
+    local -r styles_clear="${_CIDOER_TPUT_COLORS_CLEAR:=\033[0m}"
     printf "$styles%s$styles_clear\n" "${messages[*]}"
   }
+  declare -x _CIDOER_TPUT_COLORS_CLEAR
   do_lookup_color() {
-    [ -z "${CIDOER_TPUT_COLORS:-}" ] && return 0
+    [ "${#CIDOER_TPUT_COLORS[@]}" -eq 0 ] && return 0
     [ "$#" -le 0 ] || [ -z "$1" ] && {
       printf $'do_lookup_color $1 (color) is required\n' >&2
       return 1
@@ -273,7 +281,7 @@ define_cidoer_core() {
         "hidden=$($tp_cmd invis)"
       )
     fi
-    if [ ${#CIDOER_TPUT_COLORS[@]} -le 0 ]; then
+    if [ ${#CIDOER_TPUT_COLORS[@]} -eq 0 ]; then
       CIDOER_TPUT_COLORS=(
         "reset=\033[0m"
         "black=\033[30m"
@@ -632,11 +640,11 @@ define_cidoer_check() {
   }
 }
 
-declare -a CIDOER_TPUT_COLORS=()
-declare CIDOER_DEBUG='no'
-declare CIDOER_OS_TYPE=''
-declare CIDOER_HOST_TYPE=''
-declare CIDOER_LOCK_BASE_DIR=''
-declare CIDOER_LOCK_METHOD=''
+declare -a CIDOER_TPUT_COLORS
+declare CIDOER_DEBUG
+declare CIDOER_OS_TYPE
+declare CIDOER_HOST_TYPE
+declare CIDOER_LOCK_BASE_DIR
+declare CIDOER_LOCK_METHOD
 
 define_core_utils
