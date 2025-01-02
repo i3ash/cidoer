@@ -294,7 +294,12 @@ define_cidoer_core() {
     local styles_clear="${_CIDOER_TPUT_COLORS_CLEAR}"
     local args=("$@") code i=0 styles=''
     while [ "$i" -lt "${#args[@]}" ]; do
-      case "${args[$i]}" in bold | dim | underline | blink | reverse | hidden | \
+      case "${args[$i]}" in
+      '\e['*m | '\033['*m)
+        styles+="${args[$i]}"
+        i=$((i + 1))
+        ;;
+      bold | dim | underline | blink | reverse | hidden | \
         black | red | green | yellow | blue | magenta | cyan | white | \
         on_black | on_red | on_green | on_yellow | on_blue | on_magenta | on_cyan | on_white)
         code=$(do_lookup_color "${args[$i]}")

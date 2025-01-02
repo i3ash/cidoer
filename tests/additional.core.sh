@@ -15,9 +15,13 @@ do_print_section 'do_print_section'
 do_print_trace "do_print_trace"
 do_print_info "do_print_info"
 do_print_warn "do_print_warn"
-do_print_colorful blue "do_print_colorful blue"
-do_print_colorful magenta "do_print_code_bash_fn"
-do_print_code_bash_fn 'do_print_code_bash_fn' 'do_print_code_bash' 'do_print_code_lines'
+do_tint blue "do_tint blue"
+do_tint magenta "do_tint magenta"
+# https://en.wikipedia.org/wiki/ANSI_escape_code
+do_tint '\033[38;5;46m' 'do_tint with ANSI escape sequences 8-bit'
+do_tint '\e[48;2;255;255;100m' '\e[38;5;21m' 'do_tint with ANSI escape sequences 24-bit'
+
+do_print_code_bash_fn 'do_nothing' 'do_diff' 'do_replace'
 do_print_debug bash "$(declare -f define_core_utils)"
 do_print_dash_pair 'HELLO' "${HELLO:-}"
 do_print_dash_pair 'do_print_dash_pair' ''
