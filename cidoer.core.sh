@@ -11,15 +11,15 @@ define_core_utils() {
     exit 32
   fi
   define_cidoer_core
-  define_cidoer_git
   define_cidoer_lock
   define_cidoer_file
+  define_cidoer_git
+  define_cidoer_http
+  define_cidoer_check
 }
 
 define_cidoer_core() {
   do_nothing() { :; }
-  do_diff() { do_file_diff "$@"; }
-  do_replace() { do_file_replace "$@"; }
   do_workflow_job() {
     local -r job_type=$(do_trim "${1:-}")
     [[ "${job_type:-}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] || {
@@ -36,166 +36,75 @@ define_cidoer_core() {
       }
       steps+=("$step")
     done
+    [ ${#steps[@]} -le 0 ] && steps+=('do')
     local -r upper=$(printf '%s' "$job_type" | tr '[:lower:]' '[:upper:]')
     local -r lower=$(printf '%s' "$job_type" | tr '[:upper:]' '[:lower:]')
     do_print_section "${upper} JOB BEGIN"
     do_func_invoke "define_${lower}" || return $?
-    if [ ${#steps[@]} -le 0 ]; then
-      do_func_invoke "${lower}_do" || return $?
-    else
-      for step in "${steps[@]}"; do
-        do_func_invoke "${lower}_${step}" || return $?
-      done
-    fi
+    for step in "${steps[@]}"; do do_func_invoke "${lower}_${step}" || return $?; done
     do_print_section "${upper} JOB DONE!" && printf '\n'
   }
   do_func_invoke() {
-    if [ "$#" -le 0 ] || [ -z "$1" ]; then
+    local -r func_name="${1:-}"
+    local -r func_finally="${func_name}_finally"
+    [ -z "$func_name" ] && {
       do_print_warn "$(do_stack_trace)" $'$1 (func_name) is required' >&2
       return 0
-    fi
-    local -r func_name="${1:-}"
+    }
     declare -F "$func_name" >/dev/null || {
       do_print_trace "$(do_stack_trace)" "$func_name is an absent function" >&2
       return 0
     }
-    "${@}" || local -r exit_code=$?
-    [ "${exit_code:-0}" -eq 0 ] && return 0
-    do_print_warn "$(do_stack_trace)" "$func_name failed with exit code $exit_code" >&2
-    local -r error_hook_do="${func_name}_on_error"
-    declare -F "$error_hook_do" >/dev/null || return "$exit_code"
-    "$error_hook_do" "$exit_code" || return $?
+    "${@}" || local -r status=$?
+    declare -F "$func_finally" >/dev/null && {
+      [ "${status:-0}" -eq 0 ] || do_print_info "$(do_stack_trace)" "$func_name failed with exit code $status" >&2
+      "$func_finally" "$status" || local -r code=$?
+      [ "${code:-0}" -eq 0 ] || do_print_warn "$(do_stack_trace)" "$func_finally failed with exit code $code" >&2
+      return "${code:-0}"
+    }
+    [ "${status:-0}" -eq 0 ] || do_print_warn "$(do_stack_trace)" "$func_name failed with exit code $status" >&2
+    return "${status:-0}"
   }
   do_os_type() {
-    if [ -n "${CIDOER_OS_TYPE:-}" ]; then
-      printf '%s' "$CIDOER_OS_TYPE"
+    [ -n "${CIDOER_OS_TYPE:-}" ] && {
+      printf '%s\n' "$CIDOER_OS_TYPE"
       return 0
-    fi
-    local system
-    if [ -n "${OSTYPE:-}" ]; then
-      system="${OSTYPE:-}"
-    else
-      if command -v uname >/dev/null 2>&1; then system="$(uname -s | tr '[:upper:]' '[:lower:]')"; fi
-    fi
-    case "$system" in
-    linux*) system='linux' ;;
-    darwin*) system='darwin' ;;
-    cygwin* | msys* | mingw* | windows*) system='windows' ;;
-    *) system='unknown' ;;
+    }
+    if [ -z "${OSTYPE:-}" ]; then
+      command -v uname >/dev/null 2>&1 && local -r os="$(uname -s)"
+    else local -r os="${OSTYPE:-}"; fi
+    local -r type="$(printf '%s' "$os" | tr '[:upper:]' '[:lower:]')"
+    case "${type:-}" in
+    linux*) CIDOER_OS_TYPE='linux' ;;
+    darwin*) CIDOER_OS_TYPE='darwin' ;;
+    cygwin* | msys* | mingw* | windows*) CIDOER_OS_TYPE='windows' ;;
+    *) CIDOER_OS_TYPE='unknown' ;;
     esac
-    CIDOER_OS_TYPE="${system}"
-    printf '%s' "$CIDOER_OS_TYPE"
+    printf '%s\n' "$CIDOER_OS_TYPE"
   }
   do_host_type() {
-    if [ -n "${CIDOER_HOST_TYPE:-}" ]; then
-      printf '%s' "$CIDOER_HOST_TYPE"
+    [ -n "${CIDOER_HOST_TYPE:-}" ] && {
+      printf '%s\n' "$CIDOER_HOST_TYPE"
       return 0
-    fi
-    local arch type
-    if [ -n "${HOSTTYPE:-}" ]; then
-      arch="${HOSTTYPE:-}"
-    else
-      if command -v uname >/dev/null 2>&1; then arch="$(uname -m)"; fi
-    fi
-    arch="$(printf '%s' "$arch" | tr '[:upper:]' '[:lower:]')"
-    case "$arch" in
-    x86_64 | amd64 | x64) type='x86_64' ;;
-    i*86 | x86) type='x86' ;;
-    arm64 | aarch64) type='arm64' ;;
-    armv5* | armv6* | armv7* | aarch32) type='arm' ;;
-    armv8*) type="$arch" ;;
-    ppc | powerpc) type='ppc' ;;
-    ppc64 | ppc64le) type="$arch" ;;
-    mips | mips64 | mipsle | mips64le | s390x | riscv64) type="$arch" ;;
-    *) type='unknown' ;;
+    }
+    if [ -z "${HOSTTYPE:-}" ]; then
+      command -v uname >/dev/null 2>&1 && local -r host="$(uname -m)"
+    else local -r host="${HOSTTYPE:-}"; fi
+    local -r type="$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')"
+    case "$type" in
+    x86_64 | amd64 | x64) CIDOER_HOST_TYPE='x86_64' ;;
+    i*86 | x86) CIDOER_HOST_TYPE='x86' ;;
+    arm64 | aarch64) CIDOER_HOST_TYPE='arm64' ;;
+    armv5* | armv6* | armv7* | aarch32) CIDOER_HOST_TYPE='arm' ;;
+    armv8*) CIDOER_HOST_TYPE="$type" ;;
+    ppc | powerpc) CIDOER_HOST_TYPE='ppc' ;;
+    ppc64 | ppc64le) CIDOER_HOST_TYPE="$type" ;;
+    mips | mips64 | mipsle | mips64le | s390x | riscv64) CIDOER_HOST_TYPE="$type" ;;
+    *) CIDOER_HOST_TYPE='unknown' ;;
     esac
-    CIDOER_HOST_TYPE="$type"
-    printf '%s' "$CIDOER_HOST_TYPE"
+    printf '%s\n' "$CIDOER_HOST_TYPE"
   }
-  do_core_check_dependencies() {
-    do_check_optional_cmd tput bat git curl wget flock lockf
-    do_check_required_cmd printenv awk diff
-  }
-  do_check_core_dependencies() { do_core_check_dependencies; }
-  do_check_installed() {
-    if [ "$#" -le 0 ] || [ -z "$1" ]; then
-      do_print_warn "$(do_stack_trace)" $'$1 (cmd) is required'
-      return 2
-    fi
-    local cmd="$1" cmd_path
-    cmd_path=$(command -v "${cmd}" 2>/dev/null)
-    if [ -n "${cmd_path}" ] && [ -x "${cmd_path}" ]; then
-      do_print_dash_pair "${cmd}" "${cmd_path}"
-      return 0
-    fi
-    return 1
-  }
-  do_check_optional_cmd() {
-    do_print_dash_pair 'Optional Commands'
-    local cmd
-    for cmd in "${@}"; do
-      if ! do_check_installed "$cmd"; then
-        do_print_dash_pair "${cmd}" ''
-      fi
-    done
-  }
-  do_check_required_cmd() {
-    do_print_dash_pair 'Required Commands'
-    local cmd
-    local missing=0
-    for cmd in "${@}"; do
-      if ! do_check_installed "$cmd"; then
-        do_print_dash_pair "${cmd}" "$(do_tint red missing)"
-        missing=1
-      fi
-    done
-    if [ "$missing" -eq 1 ]; then
-      do_print_error 'Please install the missing required commands and try again later.'
-      return 1
-    fi
-  }
-  do_http_fetch() {
-    local address="${1:?Usage: do_http_fetch <URL> [output]}"
-    local output="${2:-}"
-    local tries="${CIDOER_FETCH_RETRIES:-2}"
-    local waitretry="${CIDOER_FETCH_WAIT_RETRY:-1}"
-    local timeout="${CIDOER_FETCH_TIMEOUT:-20}"
-    if command -v wget >/dev/null 2>&1; then
-      if [ -n "$output" ]; then
-        wget -q --tries="$tries" --timeout="$timeout" -O "$output" "$address" || {
-          do_print_error "$(do_stack_trace)" "Error: wget failed." >&2
-          return 1
-        }
-      else
-        wget -q --tries="$tries" --timeout="$timeout" -O - "$address" || {
-          do_print_error "$(do_stack_trace)" "Error: wget failed." >&2
-          return 1
-        }
-      fi
-    elif command -v curl >/dev/null 2>&1; then
-      if [ -n "$output" ]; then
-        curl -fsSL --retry "$tries" --retry-delay "$waitretry" --max-time "$timeout" "$address" -o "$output" || {
-          do_print_error "$(do_stack_trace)" "Error: curl failed." >&2
-          return 1
-        }
-      else
-        curl -fsSL --retry "$tries" --retry-delay "$waitretry" --max-time "$timeout" "$address" || {
-          do_print_error "$(do_stack_trace)" "Error: curl failed." >&2
-          return 1
-        }
-      fi
-    else
-      do_print_error "$(do_stack_trace)" "Error: Neither 'wget' nor 'curl' is installed." >&2
-      return 2
-    fi
-  }
-  do_print_trace() { printf "%s\n" "$(do_tint blue "${@}")"; }
-  do_print_info() { printf "%s\n" "$(do_tint cyan "${@}")"; }
-  do_print_warn() { printf "%s\n" "$(do_tint yellow "${@}")"; }
-  do_print_error() { printf "%s\n" "$(do_tint bold black on_red "${@}")"; }
-  do_time_now() {
-    if command -v date >/dev/null 2>&1; then printf '%s' "$(date +"%Y-%m-%d %T %Z")"; fi
-  }
+  do_time_now() { command -v date >/dev/null 2>&1 && printf '%s\n' "$(date +"%Y-%m-%d %T %Z")"; }
   do_trim() {
     local var="${1:-}"
     var="${var#"${var%%[![:space:]]*}"}"
@@ -205,26 +114,26 @@ define_cidoer_core() {
   do_stack_trace() {
     local idx filtered_fns=()
     for ((idx = ${#FUNCNAME[@]} - 2; idx > 0; idx--)); do
-      if [ 'do_func_invoke' != "${FUNCNAME[$idx]}" ]; then
-        filtered_fns+=("${FUNCNAME[$idx]}")
-      fi
+      [ 'do_func_invoke' != "${FUNCNAME[$idx]}" ] && filtered_fns+=("${FUNCNAME[$idx]}")
     done
     if [ ${#filtered_fns[@]} -gt 0 ]; then
       printf '%s --> %s\n' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}" "${filtered_fns[*]}"
     else printf '%s -->\n' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}"; fi
   }
+  do_print_trace() { printf "%s\n" "$(do_tint blue "${@}")"; }
+  do_print_info() { printf "%s\n" "$(do_tint cyan "${@}")"; }
+  do_print_warn() { printf "%s\n" "$(do_tint yellow "${@}")"; }
+  do_print_error() { printf "%s\n" "$(do_tint bold black on_red "${@}")"; }
   do_print_variable() {
     [ "$#" -le 0 ] && return 0
     local -r prefix="$1" name="$2" suffix="$3"
-    local -ra candidates=(
-      "${prefix}${name}${suffix}" "${prefix}${name}" "${name}${suffix}" "${name}"
-    )
+    local -ra candidates=("${prefix}${name}${suffix}" "${prefix}${name}" "${name}${suffix}" "${name}")
     local value='' candidate=''
     for candidate in "${candidates[@]}"; do
       value="${!candidate}"
       [ -n "$value" ] && break
     done
-    local trimmed="${value#"${value%%[![:space:]]*}"}"
+    local -r trimmed="${value#"${value%%[![:space:]]*}"}"
     printf '%s' "${trimmed%"${trimmed##*[![:space:]]}"}"
   }
   do_print_os_env() {
@@ -234,7 +143,7 @@ define_cidoer_core() {
     done < <(printenv)
   }
   do_print_dash_pair() {
-    local dashes='------------------------------------'
+    local -r dashes='------------------------------------'
     if [ ${#} -gt 1 ]; then
       printf "%s %s [%s]\n" "$(do_tint green "${1}")" \
         "$(do_tint white "${dashes:${#1}}")" "$(do_tint green "${2}")"
@@ -245,18 +154,16 @@ define_cidoer_core() {
     fi
   }
   do_print_section() {
-    local title line='==============================================================================='
-    if [ ${#} -le 0 ]; then
+    local -r line='==============================================================================='
+    [ ${#} -le 0 ] && {
       printf "%s\n" "$(do_tint bold cyan "=${line} $(do_time_now)")"
-      return
-    fi
-    title=$(do_trim "${*}")
-    if [ -n "${title}" ]; then
-      printf "%s\n" "$(do_tint bold cyan "${title} ${line:${#title}} $(do_time_now)")"
-    fi
+      return 0
+    }
+    local -r title=$(do_trim "${*}")
+    [ -n "${title}" ] && printf "%s\n" "$(do_tint bold cyan "${title} ${line:${#title}} $(do_time_now)")"
   }
   do_print_debug() {
-    if [ "${CIDOER_DEBUG:-no}" != "yes" ]; then return 0; fi
+    [ "${CIDOER_DEBUG:-no}" != "yes" ] && return 0
     do_print_code_lines "$@" >&2
   }
   do_print_code_bash_fn() { do_print_code_bash "$(declare -f "$@")"; }
@@ -266,24 +173,23 @@ define_cidoer_core() {
     else do_print_code_lines "$@"; fi
   }
   do_print_code_lines() {
-    if [ "$#" -le 0 ]; then return 0; fi
-    local stack=''
-    stack="$(do_stack_trace)"
+    [ "$#" -le 0 ] && return 0
+    local -r stack="$(do_stack_trace)"
     printf "%s\n" "$(do_tint magenta '#---|--------------------' "${stack}")"
-    if command -v bat >/dev/null 2>&1 && [ -n "${CIDOER_TPUT_COLORS:-}" ]; then
+    command -v bat >/dev/null 2>&1 && [ -n "${CIDOER_TPUT_COLORS:-}" ] && {
       local lang="$1"
       shift
       local code_block="$*"
       bat --language "$lang" --paging never --number <<<"${code_block}"
-    else
-      local arg line i=1
-      for arg in "$@"; do
-        while IFS= read -r line; do
-          printf "%s\n" "$(do_tint magenta "$(printf '#%3d|' "$i")" "$line")"
-          i=$((i + 1))
-        done <<<"$arg"
-      done
-    fi
+      return 0
+    }
+    local arg line i=1
+    for arg in "$@"; do
+      while IFS= read -r line; do
+        printf "%s\n" "$(do_tint magenta "$(printf '#%3d|' "$i")" "$line")"
+        i=$((i + 1))
+      done <<<"$arg"
+    done
     printf "%s\n" "$(do_tint magenta '#---|--------------------' "${stack}")"
   }
   declare -x _CIDOER_TPUT_COLORS_CLEAR
@@ -295,7 +201,7 @@ define_cidoer_core() {
     local code i=0 styles=''
     while [ "$i" -lt "${#args[@]}" ]; do
       case "${args[$i]}" in
-      '\e['*m | '\033['*m)
+      '\E['*m | '\e['*m | '\033['*m)
         styles+="${args[$i]}"
         i=$((i + 1))
         ;;
@@ -303,7 +209,7 @@ define_cidoer_core() {
         black | red | green | yellow | blue | magenta | cyan | white | \
         on_black | on_red | on_green | on_yellow | on_blue | on_magenta | on_cyan | on_white)
         code=$(do_lookup_color "${args[$i]}")
-        if [ -n "$code" ]; then styles+="$code"; fi
+        [ -n "$code" ] && styles+="$code"
         i=$((i + 1))
         ;;
       *) break ;;
@@ -314,11 +220,11 @@ define_cidoer_core() {
     printf "$styles%s$styles_clear\n" "${messages[*]}"
   }
   do_lookup_color() {
-    if [ -z "${CIDOER_TPUT_COLORS:-}" ]; then return 0; fi
-    if [ "$#" -le 0 ] || [ -z "$1" ]; then
+    [ -z "${CIDOER_TPUT_COLORS:-}" ] && return 0
+    [ "$#" -le 0 ] || [ -z "$1" ] && {
       printf $'do_lookup_color $1 (color) is required\n' >&2
       return 1
-    fi
+    }
     local key=${1} color
     for color in "${CIDOER_TPUT_COLORS[@]}"; do
       case "$color" in
@@ -330,43 +236,42 @@ define_cidoer_core() {
     done
   }
   do_reset_tput() {
-    CIDOER_TPUT_COLORS=()
     if command -v tput >/dev/null 2>&1; then
-      local tp_cmd colors
-      tp_cmd='tput'
       if tput -T xterm-256color colors >/dev/null 2>&1; then
-        tp_cmd='tput -T xterm-256color'
+        local -r tp_args='-T xterm-256color'
       elif tput -T xterm colors >/dev/null 2>&1; then
-        tp_cmd='tput -T xterm'
+        local -r tp_args='-T xterm'
       fi
-      colors=$($tp_cmd colors 2>/dev/null || printf '0')
-      if [ "$colors" -gt 0 ]; then
-        CIDOER_TPUT_COLORS=(
-          "reset=$($tp_cmd sgr0)"
-          "black=$($tp_cmd setaf 0)"
-          "red=$($tp_cmd setaf 1)"
-          "green=$($tp_cmd setaf 2)"
-          "yellow=$($tp_cmd setaf 3)"
-          "blue=$($tp_cmd setaf 4)"
-          "magenta=$($tp_cmd setaf 5)"
-          "cyan=$($tp_cmd setaf 6)"
-          "white=$($tp_cmd setaf 7)"
-          "on_black=$($tp_cmd setab 0)"
-          "on_red=$($tp_cmd setab 1)"
-          "on_green=$($tp_cmd setab 2)"
-          "on_yellow=$($tp_cmd setab 3)"
-          "on_blue=$($tp_cmd setab 4)"
-          "on_magenta=$($tp_cmd setab 5)"
-          "on_cyan=$($tp_cmd setab 6)"
-          "on_white=$($tp_cmd setab 7)"
-          "bold=$($tp_cmd bold)"
-          "dim=$($tp_cmd dim)"
-          "underline=$($tp_cmd smul)"
-          "blink=$($tp_cmd blink)"
-          "reverse=$($tp_cmd rev)"
-          "hidden=$($tp_cmd invis)"
-        )
-      fi
+      local -r tp_cmd="tput ${tp_args:-}"
+      local -r tp_colors=$($tp_cmd colors 2>/dev/null || printf '0')
+    fi
+    CIDOER_TPUT_COLORS=()
+    if [ "${tp_colors:-0}" -gt 0 ]; then
+      CIDOER_TPUT_COLORS=(
+        "reset=$($tp_cmd sgr0)"
+        "black=$($tp_cmd setaf 0)"
+        "red=$($tp_cmd setaf 1)"
+        "green=$($tp_cmd setaf 2)"
+        "yellow=$($tp_cmd setaf 3)"
+        "blue=$($tp_cmd setaf 4)"
+        "magenta=$($tp_cmd setaf 5)"
+        "cyan=$($tp_cmd setaf 6)"
+        "white=$($tp_cmd setaf 7)"
+        "on_black=$($tp_cmd setab 0)"
+        "on_red=$($tp_cmd setab 1)"
+        "on_green=$($tp_cmd setab 2)"
+        "on_yellow=$($tp_cmd setab 3)"
+        "on_blue=$($tp_cmd setab 4)"
+        "on_magenta=$($tp_cmd setab 5)"
+        "on_cyan=$($tp_cmd setab 6)"
+        "on_white=$($tp_cmd setab 7)"
+        "bold=$($tp_cmd bold)"
+        "dim=$($tp_cmd dim)"
+        "underline=$($tp_cmd smul)"
+        "blink=$($tp_cmd blink)"
+        "reverse=$($tp_cmd rev)"
+        "hidden=$($tp_cmd invis)"
+      )
     fi
     if [ ${#CIDOER_TPUT_COLORS[@]} -le 0 ]; then
       CIDOER_TPUT_COLORS=(
@@ -416,13 +321,13 @@ define_cidoer_lock() {
   }
   do_lock_release() {
     local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
-    if [ -f "$lock_path/pid" ]; then
+    [ -f "$lock_path/pid" ] && {
       do_print_trace "Release lock on '${1:-}'"
       rm -f "$lock_path/pid" || do_print_trace "Failed to remove pid file:" "$lock_path/pid"
-    fi
-    if [ -d "$lock_path" ]; then
+    }
+    [ -d "$lock_path" ] && {
       rmdir "$lock_path" 2>/dev/null || do_print_trace "Failed to remove directory:" "$lock_path"
-    fi
+    }
     { exec 200>&-; } 2>/dev/null
     { exec 201>&-; } 2>/dev/null
   }
@@ -439,12 +344,10 @@ define_cidoer_lock() {
     local -i pid attempt=1 lock_acquired=0
     local -r try_func="do_lock_try_${CIDOER_LOCK_METHOD:-mkdir}"
     while [ "$attempt" -le "$max_attempts" ] && [ "$lock_acquired" -eq 0 ]; do
-      if [ -d "$lock_path" ] && [ -f "$pid_file" ]; then
+      [ -d "$lock_path" ] && [ -f "$pid_file" ] && {
         pid="$(cat "$pid_file" 2>/dev/null)"
-        if [[ "$pid" =~ ^[0-9]+$ ]] && ! kill -0 "$pid" 2>/dev/null; then
-          do_lock_release "${lock_dir:-}"
-        fi
-      fi
+        [[ "$pid" =~ ^[0-9]+$ ]] && ! kill -0 "$pid" 2>/dev/null && do_lock_release "${lock_dir:-}"
+      }
       do_print_trace "Try to lock '$lock_dir' with" "$try_func". "[$attempt/$max_attempts]"
       if "$try_func" "${lock_dir:-}"; then
         lock_acquired=1
@@ -460,10 +363,10 @@ define_cidoer_lock() {
     command -v flock >/dev/null 2>&1 || return 1
     mkdir -p "$lock_path" 2>/dev/null || return 1
     { exec 200>"$lock_path/pid"; } 2>/dev/null || return 1
-    if flock -n 200 2>/dev/null; then
+    flock -n 200 2>/dev/null && {
       printf '%s\n' "$$" >"$lock_path/pid"
       return 0
-    fi
+    }
     { exec 200>&-; } 2>/dev/null
     return 1
   }
@@ -472,42 +375,42 @@ define_cidoer_lock() {
     command -v lockf >/dev/null 2>&1 || return 1
     mkdir -p "$lock_path" 2>/dev/null || return 1
     { exec 201>"$lock_path/pid"; } 2>/dev/null || return 1
-    if lockf -t 0 201 2>/dev/null; then
+    lockf -t 0 201 2>/dev/null && {
       printf '%s\n' "$$" >"$lock_path/pid"
       return 0
-    fi
+    }
     { exec 201>&-; } 2>/dev/null
     return 1
   }
   do_lock_try_mkdir() {
     local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
-    if mkdir "$lock_path" 2>/dev/null; then
+    mkdir "$lock_path" 2>/dev/null && {
       printf '%s\n' "$$" >"$lock_path/pid"
       return 0
-    fi
+    }
     return 1
   }
 }
 
 define_cidoer_file() {
   do_file_diff() {
-    if ! command -v diff >/dev/null 2>&1; then
+    command -v diff >/dev/null 2>&1 || {
       do_print_error "Command diff is not available."
       return 3
-    fi
-    if ! command -v awk >/dev/null 2>&1; then
+    }
+    command -v awk >/dev/null 2>&1 || {
       do_print_error "Command awk is not available."
       return 3
-    fi
+    }
     local file1 file2
-    if ! read -r file1 <<<"$(printf '%q' "${1:-}")"; then
+    read -r file1 <<<"$(printf '%q' "${1:-}")" || {
       do_print_error 'Failed to escape file1.'
       return 3
-    fi
-    if ! read -r file2 <<<"$(printf '%q' "${2:-}")"; then
+    }
+    read -r file2 <<<"$(printf '%q' "${2:-}")" || {
       do_print_error 'Failed to escape file2.'
       return 3
-    fi
+    }
     do_print_trace "$(do_stack_trace)" "<$file1>" "<$file2>"
     [ ! -f "$file1" ] && file1='/dev/null'
     [ ! -f "$file2" ] && file2='/dev/null'
@@ -528,10 +431,10 @@ define_cidoer_file() {
       /^\+/ { printf \"$color_g+|%03d| %s$reset\n\", new_line++, substr(\$0,2) }
     "
     local diff_status="${PIPESTATUS[0]}"
-    if [ "$diff_status" -ne 0 ] && [ "$diff_status" -ne 1 ]; then
+    [ "$diff_status" -ne 0 ] && [ "$diff_status" -ne 1 ] && {
       do_print_error 'diff command failed with status' "$diff_status"
       return "$diff_status"
-    fi
+    }
     return "$diff_status"
   }
   do_file_replace() {
@@ -541,11 +444,11 @@ define_cidoer_file() {
       found_ok='false'
       while [ "${key:0:1}" = '$' ]; do key="${key:1}"; done
       for ((i = 0; i < ${#map_keys[@]}; i++)); do
-        if [ "$key" = "${map_keys[i]}" ]; then
+        [ "$key" = "${map_keys[i]}" ] && {
           found_value="${map_vals[i]}"
           found_ok='true'
-          return
-        fi
+          return 0
+        }
       done
       _find_var "$1"
     }
@@ -565,10 +468,10 @@ define_cidoer_file() {
       local str="$1" char="$2" i=0
       while [ $i -lt ${#str} ]; do
         local c="${str:$i:1}"
-        if [ "$c" = "$char" ]; then
+        [ "$c" = "$char" ] && {
           printf '%d' $i
           return 0
-        fi
+        }
         i=$((i + 1))
       done
       printf '%d' -1
@@ -632,19 +535,18 @@ define_cidoer_git() {
   do_git_version_tag() {
     local cmd
     for cmd in git grep sort tail; do
-      if ! command -v "$cmd" >/dev/null 2>&1; then
+      command -v "$cmd" >/dev/null 2>&1 || {
         do_print_warn 'WARNING: Required command is missing:' " $cmd" >&2
         return 0
-      fi
+      }
     done
-    local exact latest
-    exact=$(git tag --points-at HEAD 2>/dev/null | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
-    if [ -n "$exact" ]; then
+    local -r exact=$(git tag --points-at HEAD 2>/dev/null | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
+    [ -n "$exact" ] && {
       printf '%s' "$exact"
-    else
-      latest=$(git tag --merged HEAD 2>/dev/null | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
-      if [ -n "$latest" ]; then printf '%s' "${latest}"; fi
-    fi
+      return 0
+    }
+    local -r latest=$(git tag --merged HEAD 2>/dev/null | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
+    [ -n "$latest" ] && printf '%s' "${latest}"
   }
   do_git_count_commits_since() {
     if [ ${#} -le 0 ] || [ -z "$1" ]; then
@@ -655,6 +557,78 @@ define_cidoer_git() {
   }
   do_git_short_commit_hash() {
     printf '%s' "$(git rev-parse --short HEAD 2>/dev/null)"
+  }
+}
+
+define_cidoer_http() {
+  do_http_fetch() {
+    local address="${1:?Usage: do_http_fetch <URL> [output]}"
+    local output="${2:-}"
+    local tries="${CIDOER_FETCH_RETRIES:-2}"
+    local waitretry="${CIDOER_FETCH_WAIT_RETRY:-1}"
+    local timeout="${CIDOER_FETCH_TIMEOUT:-20}"
+    command -v wget >/dev/null 2>&1 && {
+      [ -z "$output" ] && {
+        wget -q --tries="$tries" --timeout="$timeout" -O - "$address" || return $?
+        return 0
+      }
+      wget -q --tries="$tries" --timeout="$timeout" -O "$output" "$address" || return $?
+      return 0
+    }
+    command -v curl >/dev/null 2>&1 && {
+      [ -z "$output" ] && {
+        curl -fsSL --retry "$tries" --retry-delay "$waitretry" --max-time "$timeout" "$address" || return $?
+        return 0
+      }
+      curl -fsSL --retry "$tries" --retry-delay "$waitretry" --max-time "$timeout" "$address" -o "$output" || return $?
+      return 0
+    }
+    do_print_error "$(do_stack_trace)" "Error: Neither 'wget' nor 'curl' is installed." >&2
+    return 2
+  }
+}
+
+define_cidoer_check() {
+  do_check_installed() {
+    if [ "$#" -le 0 ] || [ -z "$1" ]; then
+      do_print_warn "$(do_stack_trace)" $'$1 (cmd) is required'
+      return 2
+    fi
+    local cmd="$1" cmd_path
+    cmd_path=$(command -v "${cmd}" 2>/dev/null)
+    if [ -n "${cmd_path}" ] && [ -x "${cmd_path}" ]; then
+      do_print_dash_pair "${cmd}" "${cmd_path}"
+      return 0
+    fi
+    return 1
+  }
+  do_check_optional_cmd() {
+    do_print_dash_pair 'Optional Commands'
+    local cmd
+    for cmd in "${@}"; do
+      if ! do_check_installed "$cmd"; then
+        do_print_dash_pair "${cmd}" ''
+      fi
+    done
+  }
+  do_check_required_cmd() {
+    do_print_dash_pair 'Required Commands'
+    local cmd
+    local missing=0
+    for cmd in "${@}"; do
+      if ! do_check_installed "$cmd"; then
+        do_print_dash_pair "${cmd}" "$(do_tint red missing)"
+        missing=1
+      fi
+    done
+    if [ "$missing" -eq 1 ]; then
+      do_print_error 'Please install the missing required commands and try again later.'
+      return 1
+    fi
+  }
+  do_core_check_dependencies() {
+    do_check_optional_cmd tput bat git curl wget flock lockf
+    do_check_required_cmd printenv awk diff || return $?
   }
 }
 

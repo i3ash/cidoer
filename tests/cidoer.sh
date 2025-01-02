@@ -19,8 +19,10 @@ define_deploy() {
     do_print_trace "$(do_stack_trace)" ': Acceptable Failure'
     return 120
   }
-  deploy_do_on_error() {
-    do_print_trace "$(do_stack_trace)" "${1:?}"
+  deploy_do_finally() {
+    local -r status=${1:-0}
+    do_print_trace "$(do_stack_trace)" "$status"
+    #return "$status"
   }
 }
 
