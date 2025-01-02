@@ -18,6 +18,8 @@ define_core_utils() {
 
 define_cidoer_core() {
   do_nothing() { :; }
+  do_diff() { do_file_diff "$@"; }
+  do_replace() { do_file_replace "$@"; }
   do_workflow_job() {
     local -r job_type=$(do_trim "${1:-}")
     [[ "${job_type:-}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] || {
@@ -191,7 +193,6 @@ define_cidoer_core() {
   do_print_info() { printf "%s\n" "$(do_tint cyan "${@}")"; }
   do_print_warn() { printf "%s\n" "$(do_tint yellow "${@}")"; }
   do_print_error() { printf "%s\n" "$(do_tint bold black on_red "${@}")"; }
-  do_print_colorful() { printf "%s\n" "$(do_tint "${@}")"; }
   do_time_now() {
     if command -v date >/dev/null 2>&1; then printf '%s' "$(date +"%Y-%m-%d %T %Z")"; fi
   }
@@ -287,12 +288,11 @@ define_cidoer_core() {
   }
   declare -x _CIDOER_TPUT_COLORS_CLEAR
   do_tint() {
-    if [ "$#" -le 0 ]; then return 0; fi
-    if [ -z "${_CIDOER_TPUT_COLORS_CLEAR:-}" ]; then
-      _CIDOER_TPUT_COLORS_CLEAR=$(do_lookup_color reset)
-    fi
-    local styles_clear="${_CIDOER_TPUT_COLORS_CLEAR}"
-    local args=("$@") code i=0 styles=''
+    [ "$#" -le 0 ] && return 0
+    [ -z "${_CIDOER_TPUT_COLORS_CLEAR:-}" ] && _CIDOER_TPUT_COLORS_CLEAR=$(do_lookup_color reset)
+    local -r styles_clear="${_CIDOER_TPUT_COLORS_CLEAR}"
+    local -ra args=("$@")
+    local code i=0 styles=''
     while [ "$i" -lt "${#args[@]}" ]; do
       case "${args[$i]}" in
       '\e['*m | '\033['*m)
@@ -309,9 +309,9 @@ define_cidoer_core() {
       *) break ;;
       esac
     done
-    local messages=("${args[@]:$i}")
-    if [ ${#messages[@]} -eq 0 ]; then return; fi
-    printf "$styles%s$styles_clear" "${messages[*]}"
+    local -ra messages=("${args[@]:$i}")
+    [ ${#messages[@]} -eq 0 ] && return 0
+    printf "$styles%s$styles_clear\n" "${messages[*]}"
   }
   do_lookup_color() {
     if [ -z "${CIDOER_TPUT_COLORS:-}" ]; then return 0; fi
@@ -490,7 +490,7 @@ define_cidoer_lock() {
 }
 
 define_cidoer_file() {
-  do_diff() {
+  do_file_diff() {
     if ! command -v diff >/dev/null 2>&1; then
       do_print_error "Command diff is not available."
       return 3
@@ -534,7 +534,7 @@ define_cidoer_file() {
     fi
     return "$diff_status"
   }
-  do_replace() {
+  do_file_replace() {
     local found_ok='false' found_value=''
     _find_value() {
       local key="$1" i
