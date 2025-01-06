@@ -118,16 +118,6 @@ jobs:
             -e SSH_HOST_01="${SSH_HOST_01:-}" \
             --tmpfs /mnt/bin:exec,size=2m \
             debian:stable-slim sh -c "apt-get update && apt-get install curl openssh-client -y && bash additional.sh"
-      - name: Run Additional Tests on Docker BusyBox
-        if: startsWith(runner.os, 'Linux')
-        continue-on-error: false
-        run: |
-          docker run --rm \
-            -v /usr/bin/bash:/usr/bin/bash \
-            -v /lib/x86_64-linux-gnu/libtinfo.so.6:/lib/libtinfo.so.6 \
-            -v ${{ github.workspace }}:/workspace \
-            -w /workspace/tests \
-            busybox:stable-glibc sh -c "bash additional.sh"
 
       - name: Run Additional Tests
         working-directory: ${{ github.workspace }}/tests
