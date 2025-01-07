@@ -12,6 +12,7 @@ define_core_utils() {
     exit 32
   fi
   define_cidoer_core
+  define_cidoer_print
   define_cidoer_lock
   define_cidoer_file
   define_cidoer_git
@@ -22,6 +23,7 @@ define_core_utils() {
 define_cidoer_core() {
   do_nothing() { :; }
   do_workflow_job() {
+    declare -F 'do_stack_trace' >/dev/null || do_print_fix
     local -r job_type=$(do_trim "${1:-}")
     [[ "${job_type:-}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] || {
       do_print_warn "$(do_stack_trace)" $'$1 (job_type) is invalid:' "'${1:-}'" >&2
@@ -46,6 +48,7 @@ define_cidoer_core() {
     do_print_section "${upper} JOB DONE!" && printf '\n'
   }
   do_func_invoke() {
+    declare -F 'do_stack_trace' >/dev/null || do_print_fix
     local -r func_name="${1:-}"
     local -r func_finally="${func_name}_finally"
     [ -z "$func_name" ] && {
@@ -66,6 +69,36 @@ define_cidoer_core() {
     [ "${status:-0}" -eq 0 ] || do_print_warn "$(do_stack_trace)" "$func_name failed with exit code $status" >&2
     return "${status:-0}"
   }
+  do_trim() {
+    local var="${1:-}"
+    var="${var#"${var%%[![:space:]]*}"}"
+    var="${var%"${var##*[![:space:]]}"}"
+    printf '%s' "$var"
+  }
+  do_print_variable() {
+    [ "$#" -le 0 ] && return 0
+    local -r prefix="${1:-}" name="${2:-}" suffix="${3:-}"
+    local -ra candidates=("${prefix}${name}${suffix}" "${prefix}${name}" "${name}${suffix}" "${name}")
+    local value='' candidate=''
+    for candidate in "${candidates[@]}"; do
+      value="${!candidate:-}"
+      [ -n "$value" ] && break
+    done
+    local -r trimmed="${value#"${value%%[![:space:]]*}"}"
+    printf '%s' "${trimmed%"${trimmed##*[![:space:]]}"}"
+  }
+  do_print_fix() {
+    declare -F 'do_stack_trace' >/dev/null || { do_stack_trace() { printf ''; }; }
+    declare -F 'do_tint' >/dev/null || { do_tint() { printf '%s\n' "- ${*:2}"; }; }
+    declare -F 'do_print_trace' >/dev/null || { do_print_trace() { printf '%s\n' "- $*"; }; }
+    declare -F 'do_print_info' >/dev/null || { do_print_info() { printf '%s\n' "= $*"; }; }
+    declare -F 'do_print_warn' >/dev/null || { do_print_warn() { printf '%s\n' "? $*"; }; }
+    declare -F 'do_print_error' >/dev/null || { do_print_error() { printf '%s\n' "! $*"; }; }
+    declare -F 'do_print_section' >/dev/null || { do_print_section() { printf '%s\n' "== $*"; }; }
+    declare -F 'do_print_dash_pair' >/dev/null || { do_print_dash_pair() { printf '%s\n' "-- $*"; }; }
+    declare -F 'do_print_code_lines' >/dev/null || { do_print_code_lines() { printf '%s\n' "$*"; }; }
+  }
+  do_print_fix
   do_os_type() {
     [ -n "${CIDOER_OS_TYPE:-}" ] && {
       printf '%s\n' "$CIDOER_OS_TYPE"
@@ -105,13 +138,9 @@ define_cidoer_core() {
     esac
     printf '%s\n' "$CIDOER_HOST_TYPE"
   }
-  do_time_now() { command -v date >/dev/null 2>&1 && printf '%s\n' "$(date +"%Y-%m-%d %T %Z")"; }
-  do_trim() {
-    local var="${1:-}"
-    var="${var#"${var%%[![:space:]]*}"}"
-    var="${var%"${var##*[![:space:]]}"}"
-    printf '%s' "$var"
-  }
+}
+
+define_cidoer_print() {
   do_stack_trace() {
     local idx filtered_fns=()
     for ((idx = ${#FUNCNAME[@]} - 2; idx > 0; idx--)); do
@@ -125,18 +154,6 @@ define_cidoer_core() {
   do_print_info() { do_tint cyan "${@}"; }
   do_print_warn() { do_tint yellow "${@}"; }
   do_print_error() { do_tint bold black on_red "${@}"; }
-  do_print_variable() {
-    [ "$#" -le 0 ] && return 0
-    local -r prefix="${1:-}" name="${2:-}" suffix="${3:-}"
-    local -ra candidates=("${prefix}${name}${suffix}" "${prefix}${name}" "${name}${suffix}" "${name}")
-    local value='' candidate=''
-    for candidate in "${candidates[@]}"; do
-      value="${!candidate:-}"
-      [ -n "$value" ] && break
-    done
-    local -r trimmed="${value#"${value%%[![:space:]]*}"}"
-    printf '%s' "${trimmed%"${trimmed##*[![:space:]]}"}"
-  }
   do_print_os_env() {
     local key value
     while IFS='=' read -r key value; do
@@ -155,6 +172,7 @@ define_cidoer_core() {
     }
     do_tint white "${dashes}${dashes}"
   }
+  do_time_now() { command -v date >/dev/null 2>&1 && printf '%s\n' "$(date +"%Y-%m-%d %T %Z")"; }
   do_print_section() {
     local -r line='==============================================================================='
     [ ${#} -le 0 ] && {
