@@ -150,10 +150,10 @@ define_cidoer_print() {
       printf '%s --> %s\n' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}" "${filtered_fns[*]}"
     else printf '%s -->\n' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}"; fi
   }
-  do_print_trace() { do_tint blue "${@}"; }
-  do_print_info() { do_tint cyan "${@}"; }
-  do_print_warn() { do_tint yellow "${@}"; }
-  do_print_error() { do_tint bold black on_red "${@}"; }
+  do_print_trace() { do_tint "${CIDOER_COLOR_BLUE:-blue}" "${@}"; }
+  do_print_info() { do_tint "${CIDOER_COLOR_CYAN:-cyan}" "${@}"; }
+  do_print_warn() { do_tint "${CIDOER_COLOR_YELLOW:-yellow}" "${@}"; }
+  do_print_error() { do_tint "${CIDOER_COLOR_ERROR:-red}" bold "${@}"; }
   do_print_os_env() {
     local key value
     while IFS='=' read -r key value; do
@@ -162,25 +162,27 @@ define_cidoer_print() {
   }
   do_print_dash_pair() {
     local -r dashes='------------------------------------'
+    local -r green="${CIDOER_COLOR_GREEN:-green}"
+    local -r white="${CIDOER_COLOR_WHITE:-white}"
     [ ${#} -gt 1 ] && {
-      printf "%s %s [%s]\n" "$(do_tint green "${1}")" "$(do_tint white "${dashes:${#1}}")" "$(do_tint green "${2}")"
+      printf "%s %s [%s]\n" "$(do_tint "$green" "$1")" "$(do_tint "$white" "${dashes:${#1}}")" "$(do_tint "$green" "$2")"
       return 0
     }
     [ ${#} -gt 0 ] && {
-      printf "%s < %s >\n" "$(do_tint white "${dashes}-")" "$(do_tint white "${1}")"
+      printf "%s < %s >\n" "$(do_tint "$white" "$dashes-")" "$(do_tint "$white" "$1")"
       return 0
     }
-    do_tint white "${dashes}${dashes}"
+    do_tint "$white" "$dashes$dashes"
   }
   do_time_now() { command -v date >/dev/null 2>&1 && printf '%s\n' "$(date +"%Y-%m-%d %T %Z")"; }
   do_print_section() {
     local -r line='==============================================================================='
     [ ${#} -le 0 ] && {
-      do_tint bold cyan "=${line} $(do_time_now)"
+      do_tint bold "${CIDOER_COLOR_CYAN:-cyan}" "=${line} $(do_time_now)"
       return 0
     }
     local -r title=$(do_trim "${*}")
-    [ -n "${title}" ] && do_tint bold cyan "${title} ${line:${#title}} $(do_time_now)"
+    [ -n "${title}" ] && do_tint bold "${CIDOER_COLOR_CYAN:-cyan}" "${title} ${line:${#title}} $(do_time_now)"
   }
   do_print_debug() {
     [ "${CIDOER_DEBUG:-no}" != "yes" ] && return 0
@@ -197,22 +199,23 @@ define_cidoer_print() {
   do_print_code_lines() {
     [ "$#" -le 0 ] && return 0
     local -r stack="$(do_stack_trace)"
-    do_tint magenta '#---|--------------------' "${stack}"
+    local -r magenta="${CIDOER_COLOR_MAGENTA:-magenta}"
+    do_tint "$magenta" '#---|--------------------' "${stack}"
     [ ${#CIDOER_TPUT_COLORS[@]} -gt 0 ] && command -v bat >/dev/null 2>&1 && {
       local -r lang="$1" && shift
       local -r code_block="$*"
       bat --language "$lang" --paging never --number <<<"${code_block}"
-      do_tint magenta '#---|--------------------' "${stack}"
+      do_tint "$magenta" '#---|--------------------' "${stack}"
       return 0
     }
     local arg line i=1
     for arg in "$@"; do
       while IFS= read -r line; do
-        do_tint magenta "$(printf '#%3d|' "$i")" "$line"
+        do_tint "$magenta" "$(printf '#%3d|' "$i")" "$line"
         i=$((i + 1))
       done <<<"$arg"
     done
-    do_tint magenta '#---|--------------------' "${stack}"
+    do_tint "$magenta" '#---|--------------------' "${stack}"
   }
   do_tint() {
     [ "$#" -le 0 ] && return 0
@@ -441,8 +444,8 @@ define_cidoer_file() {
     [ ! -f "$file1" ] && file1='/dev/null'
     [ ! -f "$file2" ] && file2='/dev/null'
     local color_r color_g reset
-    color_r="$(do_lookup_color red)"
-    color_g="$(do_lookup_color green)"
+    color_r="${CIDOER_COLOR_RED:-$(do_lookup_color red)}"
+    color_g="${CIDOER_COLOR_GREEN:-$(do_lookup_color green)}"
     reset="$(do_lookup_color reset)"
     diff -U0 "$file1" "$file2" | awk "
       /^@/ {
@@ -650,10 +653,10 @@ define_cidoer_check() {
     local cmd
     local missing=0
     for cmd in "${@}"; do
-      if ! do_check_installed "$cmd"; then
-        do_print_dash_pair "${cmd}" "$(do_tint red missing)"
+      do_check_installed "$cmd" || {
+        do_print_dash_pair "${cmd}" "$(do_tint "${CIDOER_COLOR_RED:-red}" missing)"
         missing=1
-      fi
+      }
     done
     if [ "$missing" -eq 1 ]; then
       do_print_error 'Please install the missing required commands and try again later.'
@@ -666,11 +669,21 @@ define_cidoer_check() {
   }
 }
 
-declare -a CIDOER_TPUT_COLORS
 declare CIDOER_DEBUG
 declare CIDOER_OS_TYPE
 declare CIDOER_HOST_TYPE
 declare CIDOER_LOCK_BASE_DIR
 declare CIDOER_LOCK_METHOD
+
+declare -a CIDOER_TPUT_COLORS
+declare CIDOER_COLOR_BLACK
+declare CIDOER_COLOR_RED
+declare CIDOER_COLOR_GREEN
+declare CIDOER_COLOR_YELLOW
+declare CIDOER_COLOR_BLUE
+declare CIDOER_COLOR_MAGENTA
+declare CIDOER_COLOR_CYAN
+declare CIDOER_COLOR_WHITE
+declare CIDOER_COLOR_ERROR
 
 define_core_utils
