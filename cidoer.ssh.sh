@@ -9,20 +9,32 @@ declare -ax CIDOER_SSH_EXPORT_VAR=()
 define_cidoer_ssh() {
   declare -F 'do_ssh_exec' >/dev/null && return 0
   declare -F 'do_tint' >/dev/null || {
-    [ -n "${CIDOER_DIR:-}" ] && source "${CIDOER_DIR:?}"/cidoer.core.sh
+    [ -f "${CIDOER_DIR:-}"/cidoer.core.sh ] && {
+      . "${CIDOER_DIR:-}"/cidoer.core.sh
+      do_print_trace 'source' "${CIDOER_DIR:-}"/cidoer.core.sh
+    }
   }
   do_ssh_check_dependencies() {
     do_check_optional_cmd ssh-keygen expect
     do_check_required_cmd ssh-agent ssh-add ssh-keyscan ssh
   }
   do_ssh_exec() {
-    local -r ssh="${1}" input="${*:2}"
+    local -r ssh="${1:-}"
+    [ "${ssh:0:4}" = 'ssh ' ] || {
+      do_print_warn "$(do_stack_trace)" "Argument \$1 does not start with 'ssh '"
+      return 1
+    }
+    [ $# -lt 2 ] && {
+      $ssh || return $?
+      return 0
+    }
     local line script=''
     while IFS= read -r line; do
       line="$(do_trim "$line")"
-      [ -n "$line" ] && printf -v script '%s\n%s' "$script" "$line"
-    done <<<"$input"
-    script="$(do_trim "$script")"
+      [ -z "$line" ] && continue
+      printf -v script '%s\n%s' "$script" "$line"
+      [[ "$line" == *' '* ]] || { declare -F "$line" >/dev/null && do_ssh_export "$line"; }
+    done <<<"$(printf "%s\n" "${@:2}")"
     local var fun
     for var in "${CIDOER_SSH_EXPORT_VAR[@]}"; do
       printf -v script '%s\n%s' "$(declare -p "$var")" "$script"
