@@ -200,14 +200,16 @@ define_cidoer_print() {
     [ "$#" -le 0 ] && return 0
     local -r stack="$(do_stack_trace)"
     local -r magenta="${CIDOER_COLOR_MAGENTA:-magenta}"
+    [ "$#" -gt 1 ] && local -r lang="$1"
     do_tint "$magenta" '#---|--------------------' "${stack}"
-    [ ${#CIDOER_TPUT_COLORS[@]} -gt 0 ] && command -v bat >/dev/null 2>&1 && {
-      local -r lang="$1" && shift
-      local -r code_block="$*"
-      bat --language "$lang" --paging never --number <<<"${code_block}"
-      do_tint "$magenta" '#---|--------------------' "${stack}"
-      return 0
-    }
+    if [ ${#CIDOER_TPUT_COLORS[@]} -gt 0 ] &&
+      command -v bat >/dev/null 2>&1 &&
+      bat --list-languages | sed 's/[:,]/ /g' | grep -q " ${lang:-}"; then
+      bat --language "${lang:-}" --paging never --number <<<"${*:2}" 2>/dev/null && {
+        do_tint "$magenta" '#---|--------------------' "${stack}" "${lang:-}"
+        return 0
+      }
+    fi
     local arg line i=1
     for arg in "$@"; do
       while IFS= read -r line; do
