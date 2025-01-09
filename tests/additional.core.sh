@@ -37,7 +37,7 @@ do_print_dash_pair 'do_print_dash_pair' ''
 #do_print_dash_pair 'do_print_os_env' ''
 #do_print_os_env
 CIDOER_DEBUG='yes'
-do_print_debug bash "$(declare -f define_core_utils)"
+do_print_code_bash_debug "$(declare -f define_core_utils)"
 do_print_debug go '// This is a debug message'
 do_print_debug txt '// This is a debug message'
 do_print_debug text '// This is a debug message'

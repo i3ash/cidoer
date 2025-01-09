@@ -188,6 +188,10 @@ define_cidoer_print() {
     [ "${CIDOER_DEBUG:-no}" != "yes" ] && return 0
     do_print_code_lines "$@" >&2
   }
+  do_print_code_bash_debug() {
+    [ "${CIDOER_DEBUG:-no}" != "yes" ] && return 0
+    do_print_code_bash "$@" >&2
+  }
   do_print_code_bash_fn() { do_print_code_bash "$(declare -f "$@")"; }
   do_print_code_bash() {
     [ ${#CIDOER_TPUT_COLORS[@]} -gt 0 ] && command -v bat >/dev/null 2>&1 && {
