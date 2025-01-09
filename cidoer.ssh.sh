@@ -42,7 +42,7 @@ define_cidoer_ssh() {
     for fun in "${CIDOER_SSH_EXPORT_FUN[@]}"; do
       printf -v script '%s\n%s' "$(declare -f "$fun")" "$script"
     done
-    do_print_debug 'bash' "$(printf '%s\n#| %s -- /usr/bin/env bash -eu -o pipefail -s -' "$script" "$ssh")"
+    do_print_code_bash_debug "$(printf '%s\n#| %s -- /usr/bin/env bash -eu -o pipefail -s -' "$script" "$ssh")"
     printf '%s\n' "$script" | $ssh -- /usr/bin/env bash -eu -o pipefail -s -
   }
   do_ssh_export_reset() {
