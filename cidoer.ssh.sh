@@ -15,13 +15,13 @@ define_cidoer_ssh() {
     }
   }
   do_ssh_check_dependencies() {
-    do_check_optional_cmd ssh-keygen expect
-    do_check_required_cmd ssh-agent ssh-add ssh-keyscan ssh
+    do_check_optional_cmd ssh-keygen expect shasum sha256sum
+    do_check_required_cmd ssh-agent ssh-add ssh-keyscan ssh tar gzip
   }
   do_ssh_exec() {
     local -r ssh="${1:-}"
     [ "${ssh:0:4}" = 'ssh ' ] || {
-      do_print_warn "$(do_stack_trace)" "Argument \$1 does not start with 'ssh '"
+      do_print_error "$(do_stack_trace)" "Argument \$1 does not start with 'ssh '"
       return 1
     }
     [ $# -lt 2 ] && {
@@ -42,8 +42,79 @@ define_cidoer_ssh() {
     for fun in "${CIDOER_SSH_EXPORT_FUN[@]}"; do
       printf -v script '%s\n%s' "$(declare -f "$fun")" "$script"
     done
-    do_print_code_bash_debug "$(printf '%s\n#| %s -- /usr/bin/env bash -eu -o pipefail -s -' "$script" "$ssh")"
-    printf '%s\n' "$script" | $ssh -- /usr/bin/env bash -eu -o pipefail -s -
+    # do_print_code_bash_debug "$(printf '%s\n#| %s -- /usr/bin/env bash -eu -o pipefail -s -' "$script" "$ssh")"
+    # printf '%s\n' "$script" | $ssh -- /usr/bin/env bash -eu -o pipefail -s -
+    printf -v script '%s\n%s\n%s\n%s' '#!/usr/bin/env bash' 'set -eu' 'set -o pipefail' "$script"
+    LC_ALL='' $ssh "$script" || local -r status="$?"
+    do_print_code_bash_debug "$(printf '%s\n#| %s' "$script" "$ssh")"
+    [ "${status:-0}" -eq 0 ] || return "${status:-0}"
+  }
+  do_ssh_archive_dir() {
+    local -rx local_path="${1:-}"
+    local -r ssh="${2:-}"
+    local -rx remote_path="${3:-}"
+    local param
+    for param in 'local_path' 'ssh' 'remote_path'; do
+      if [ -z "${!param}" ]; then
+        do_print_error "$(do_stack_trace)" "Error: Parameter '$param' is required" >&2
+        return 1
+      fi
+    done
+    local resolved_path
+    resolved_path=$(realpath -q "$local_path" 2>/dev/null) || {
+      do_print_error "$(do_stack_trace)" "Error: Invalid path or insufficient permissions: $resolved_path" >&2
+      return 1
+    }
+    [ -d "$resolved_path" ] || {
+      do_print_error "$(do_stack_trace)" "Error: Not a directory: $resolved_path" >&2
+      return 1
+    }
+    detect_sha256_cmd() {
+      command -v sha256sum >/dev/null 2>&1 && {
+        printf 'sha256sum'
+        return 0
+      }
+      command -v shasum >/dev/null 2>&1 && {
+        printf 'shasum -a 256'
+        return 0
+      }
+      do_print_error "$(do_stack_trace)" 'Error: No suitable command for calculating SHA-256' >&2
+      return 1
+    }
+    local -r sha256_cmd="$(detect_sha256_cmd)" || return "$?"
+    do_ssh_export remote_path
+    tar --no-xattrs --version >/dev/null 2>&1 && local -r tar_cmd='tar --no-xattrs'
+    do_print_trace "$(do_stack_trace)" "<${tar_cmd:-tar} -cf - $local_path>" "<$ssh:$remote_path>"
+    local -r local_hash=$(${tar_cmd:-tar} -cf - "$local_path" | gzip -n | $sha256_cmd | awk '{print $1}')
+    do_print_dash_pair 'sha256sum_local' "$local_hash"
+    { ${tar_cmd:-tar} -cf - "$local_path" | gzip -n |
+      do_ssh_exec "$ssh" $'cat >${remote_path:?}'; } || local -r status="$?"
+    [ "${status:-0}" -eq 0 ] || {
+      do_print_error "$(do_stack_trace)" "Error: Transfer failed with status ${status:-0}" >&2
+      return "${status:-0}"
+    }
+    calculate_sha256() {
+      local -r file_path="${1:?}"
+      local -r output_file="${2:-${file_path}.sha256}"
+      local -r sha256="$(detect_sha256_cmd)" || return "$?"
+      local -r sha256_hash="$($sha256 "$file_path" | awk '{print $1}')"
+      printf '%s\n' "$sha256_hash" >"$output_file"
+      printf '%s\n' "$sha256_hash"
+    }
+    do_ssh_export detect_sha256_cmd calculate_sha256
+    local -r remote_hash=$(do_ssh_exec "$ssh" $'
+      calculate_sha256 "${remote_path:?}"
+    ') || {
+      do_print_error "$(do_stack_trace)" "Error: Failed to calculate remote checksum" >&2
+      return 2
+    }
+    do_ssh_export_reset
+    do_print_dash_pair 'sha256sum_remote' "$remote_hash"
+    [ "$local_hash" = "$remote_hash" ] || {
+      do_print_error "$(do_stack_trace)" "Error: Checksum verification failed" >&2
+      return 3
+    }
+    do_print_info "$(do_stack_trace)" "Transfer completed and verified successfully"
   }
   do_ssh_export_reset() {
     CIDOER_SSH_EXPORT_FUN=()

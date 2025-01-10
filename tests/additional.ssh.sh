@@ -20,14 +20,18 @@ test_ssh() {
   [ -z "${SSH_HOST_01:-}" ] && return 3
   do_ssh_add_known_host "$SSH_HOST_01" "${SSH_PORT_01:-}" || do_print_warn 'do_ssh_add_known_host returned' "$?"
   local -r cmd="$(do_ssh_print_chain "${SSH_USER_01:-debian}@$SSH_HOST_01")"
-  CIDOER_DEBUG='yes'
   do_ssh_exec "${cmd:-}" define_cidoer_core define_cidoer_print $'
     do_print_info  "$(do_stack_trace)" "${CIDOER_SSH_EXPORT_VAR[*]}"
     do_print_trace "$(do_stack_trace)" "$(id)"
     do_print_info  "$(do_stack_trace)" "$(uname -a)"
   ' || do_print_warn 'do_ssh_exec returned' "$?"
-  CIDOER_DEBUG='no'
   do_ssh_export_reset
+  pushd .. >/dev/null
+  local -r ssh="ssh -T -o ConnectTimeout=3 -p 22 ${SSH_USER_01:-debian}@$SSH_HOST_01"
+  CIDOER_DEBUG='yes'
+  do_ssh_archive_dir 'tests' "$ssh" '/tmp/tests.tar.gz' || do_print_warn 'do_ssh_archive_dir failed with' "$?"
+  CIDOER_DEBUG='no'
+  popd >/dev/null
   [ -n "${SSH_HOST_01:-}" ] && ssh-keygen -R "$SSH_HOST_01"
 }
 
