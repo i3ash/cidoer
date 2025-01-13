@@ -87,8 +87,13 @@ define_cidoer_ssh() {
     local -r sha256_cmd="$(detect_sha256_cmd)" || return "$?"
     do_ssh_export remote_path
     tar --no-xattrs --version >/dev/null 2>&1 && local -r tar_cmd='tar --no-xattrs'
-    do_print_trace "$(do_stack_trace)" "<${tar_cmd:-tar} -cf - $local_path>" "<$ssh:$remote_path>"
+    do_print_trace "$(do_stack_trace)" "<${tar_cmd:-tar} -cf - $local_path>" "<$ssh:${remote_path:-}>"
     local -r local_hash=$(${tar_cmd:-tar} -cf - "$local_path" | gzip -n | $sha256_cmd | awk '{print $1}')
+    local -r lock_dir="archive-to${remote_path//\//-}.d"
+    do_lock_acquire "$lock_dir" || {
+      do_print_error "$(do_stack_trace)" "Failed to acquire lock on '$lock_dir'." >&2
+      return 3
+    }
     [ -n "${resolved_path:-}" ] && do_print_dash_pair 'realpath' "$resolved_path"
     do_print_dash_pair 'sha256sum_local' "$local_hash"
     cat_with_ssh() {
@@ -99,6 +104,7 @@ define_cidoer_ssh() {
       [ "${status:-0}" -eq 0 ] || return "${status:-0}"
     }
     { ${tar_cmd:-tar} -cf - "$local_path" | gzip -n | cat_with_ssh "$ssh"; } || local -r status="$?"
+    do_lock_release "$lock_dir" >/dev/null
     [ "${status:-0}" -eq 0 ] || {
       do_print_error "$(do_stack_trace)" "Error: Transfer failed with status ${status:-0}" >&2
       return "${status:-0}"
@@ -112,9 +118,7 @@ define_cidoer_ssh() {
       printf '%s\n' "$sha256_hash"
     }
     do_ssh_export detect_sha256_cmd calculate_sha256
-    local -r remote_hash=$(do_ssh_exec "$ssh" $'
-      calculate_sha256 "${remote_path:?}"
-    ') || {
+    local -r remote_hash=$(do_ssh_exec "$ssh" $'calculate_sha256 "${remote_path:?}"') || {
       do_print_error "$(do_stack_trace)" "Error: Failed to calculate remote checksum" >&2
       return 2
     }
