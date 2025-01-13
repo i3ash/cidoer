@@ -19,7 +19,10 @@ teardown() {
 @test "do_stack_trace" {
   a() { b; }
   b() { c; }
-  c() { do_stack_trace; }
+  c() {
+    printf 'hello\n' >/dev/null
+    do_stack_trace
+  }
   run a
   [[ "$status" == 0 ]]
   [[ "${lines[0]}" == "$(whoami)@$(hostname) --> "*"a b c" ]]

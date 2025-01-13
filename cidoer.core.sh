@@ -142,6 +142,7 @@ define_cidoer_core() {
 
 define_cidoer_print() {
   do_stack_trace() {
+    local -r status=$?
     local idx filtered_fns=()
     for ((idx = ${#FUNCNAME[@]} - 2; idx > 0; idx--)); do
       [ 'do_func_invoke' != "${FUNCNAME[$idx]}" ] && filtered_fns+=("${FUNCNAME[$idx]}")
@@ -149,6 +150,7 @@ define_cidoer_print() {
     if [ ${#filtered_fns[@]} -gt 0 ]; then
       printf '%s --> %s\n' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}" "${filtered_fns[*]}"
     else printf '%s -->\n' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}"; fi
+    return $status
   }
   do_print_trace() { do_tint "${CIDOER_COLOR_BLUE:-blue}" "${@}"; }
   do_print_info() { do_tint "${CIDOER_COLOR_CYAN:-cyan}" "${@}"; }
