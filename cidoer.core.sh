@@ -360,10 +360,10 @@ define_cidoer_lock() {
     local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
     [ -f "$lock_path/pid" ] && {
       do_print_trace "Release lock on '${1:-}'"
-      rm -f "$lock_path/pid" || do_print_trace "Failed to remove pid file:" "$lock_path/pid"
+      rm -f "$lock_path/pid" || do_print_trace "Failed to remove pid file:" "$lock_path/pid" >&2
     }
     [ -d "$lock_path" ] && {
-      rmdir "$lock_path" 2>/dev/null || do_print_trace "Failed to remove directory:" "$lock_path"
+      rmdir "$lock_path" 2>/dev/null || do_print_trace "Failed to remove directory:" "$lock_path" >&2
     }
     { exec 200>&-; } 2>/dev/null
     { exec 201>&-; } 2>/dev/null
