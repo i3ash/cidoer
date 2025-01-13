@@ -16,7 +16,7 @@ define_cidoer_ssh() {
   }
   do_ssh_check_dependencies() {
     do_check_optional_cmd ssh-keygen expect shasum sha256sum realpath
-    do_check_required_cmd ssh-agent ssh-add ssh-keyscan ssh tar gzip
+    do_check_required_cmd ssh ssh-agent ssh-add ssh-keyscan tar gzip || return $?
   }
   do_ssh_make_bash() {
     local line script=''
@@ -185,31 +185,6 @@ define_cidoer_ssh() {
     done
     printf '%s' "${chain}"
     # Chained / Nested SSH command for multi-hop connections
-  }
-  do_ssh_agent_ensure() {
-    if ! command -v ssh-agent >/dev/null 2>&1; then return 127; fi
-    if ! command -v ssh-add >/dev/null 2>&1; then return 127; fi
-    if [ -z "${SSH_AUTH_SOCK:-}" ] || ! ssh-add -l >/dev/null 2>&1; then
-      local user
-      user="${USER:=$(whoami)}"
-      local agent_dir="/tmp/ssh-agent-${user:-}"
-      mkdir -p "$agent_dir"
-      if [[ -f "$agent_dir/ssh-agent.pid" ]]; then
-        local agent_pid
-        agent_pid=$(cat "$agent_dir/ssh-agent.pid")
-        if ! kill -0 "$agent_pid" 2>/dev/null; then
-          do_print_trace "Removing stale ssh-agent files..."
-          rm -f "$agent_dir/ssh-agent.*"
-        fi
-      fi
-      do_print_trace "Starting new ssh-agent..."
-      eval "$(ssh-agent -a "$agent_dir/ssh-agent.sock")"
-      printf '%s' "$SSH_AGENT_PID" >"$agent_dir/ssh-agent.pid"
-      declare -rx SSH_AGENT_PID
-      declare -rx SSH_AUTH_SOCK="$agent_dir/ssh-agent.sock"
-    else
-      do_print_trace "ssh-agent is already running and accessible."
-    fi
   }
   do_ssh_add_known_host() {
     if ! command -v ssh-keyscan &>/dev/null; then

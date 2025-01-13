@@ -94,6 +94,7 @@ jobs:
             -v ${{ github.workspace }}:/workspace \
             -w /workspace/tests \
             -e KEY_01_PASSPHRASE="${{ secrets.KEY_01_PASSPHRASE }}" \
+            -e SSH_KEY_02_PASSPHRASE="${{ secrets.SSH_KEY_02_PASSPHRASE }}" \
             -e KEY_01="${{ secrets.KEY_01 }}" \
             -e SSH_USER_01="${{ vars.SSH_USER_01 }}" \
             -e SSH_HOST_01="${{ secrets.SSH_HOST_01 }}" \
@@ -108,6 +109,7 @@ jobs:
             -v ${{ github.workspace }}:/workspace \
             -w /workspace/tests \
             -e KEY_01_PASSPHRASE="${{ secrets.KEY_01_PASSPHRASE }}" \
+            -e SSH_KEY_02_PASSPHRASE="${{ secrets.SSH_KEY_02_PASSPHRASE }}" \
             -e KEY_01="${{ secrets.KEY_01 }}" \
             -e SSH_USER_01="${{ vars.SSH_USER_01 }}" \
             -e SSH_HOST_01="${{ secrets.SSH_HOST_01 }}" \
@@ -122,6 +124,7 @@ jobs:
           HELLO: ${{ env.HELLO }}
           KEY_01: ${{ secrets.KEY_01 }}
           KEY_01_PASSPHRASE: ${{ secrets.KEY_01_PASSPHRASE }}
+          SSH_KEY_02_PASSPHRASE: ${{ secrets.SSH_KEY_02_PASSPHRASE }}
           SSH_USER_01: ${{ vars.SSH_USER_01 }}
           SSH_HOST_01: ${{ secrets.SSH_HOST_01 }}
           SSH_HOST_02: ${{ secrets.SSH_HOST_02 }}
@@ -145,3 +148,4 @@ jobs:
           do_print_dash_pair 'SSH_AGENT_PID' "$SSH_AGENT_PID"
           do_print_dash_pair 'SSH_AUTH_SOCK' "$SSH_AUTH_SOCK"
           bats ./
+          ssh-agent -k

@@ -7,14 +7,8 @@ set -eu -o pipefail
 [ -f ../cidoer.ssh.sh ] && source ../cidoer.ssh.sh
 
 test_ssh_prepare() {
-  do_ssh_check_dependencies
-  _abc="'exiting'"
-  _on_exit() {
-    [ -n "${SSH_HOST_01:-}" ] && ssh-keygen -R "$SSH_HOST_01"
-    do_print_warn "$(do_stack_trace)" "$_abc"
-  }
-  trap _on_exit EXIT
-  ! do_ssh_agent_ensure && return 2
+  do_ssh_check_dependencies || return $?
+  eval "$(ssh-agent -s)" || return $?
   #ssh-add -D || do_print_warn 'ssh-add -D returned' "$?"
   [ -n "${KEY_01:-}" ] && do_func_invoke do_ssh_add_key "$KEY_01" KEY_01_PASSPHRASE
   do_print_trace ssh-add -l
@@ -65,6 +59,39 @@ test_ssh_exec_chained() {
   do_print_code_bash "$(declare -f demo_fn)"
 }
 
+test_ssh_exec_jumped() {
+  [ -z "${SSH_HOST_02:-}" ] && {
+    do_print_warn "$(do_stack_trace)" 'Absent env SSH_HOST_02'
+    return 1
+  }
+  run_on_target() {
+    do_print_trace "$(do_stack_trace)" "$(uname -a)"
+    do_print_trace "$(do_stack_trace)" "$(id)"
+    return 0
+  }
+  run_on_jumper() {
+    do_print_trace "$(do_stack_trace)" "$(uname -a)"
+    do_print_trace "$(do_stack_trace)" "$(id)"
+    eval "$(ssh-agent -s)" || return $?
+    do_ssh_add_key_file ~/.ssh/id_ecdsa SSH_KEY_02_PASSPHRASE ||
+      do_print_warn "$(do_stack_trace)" 'do_ssh_add_key_file() ->' "$?"
+    do_ssh_add_known_host "$SSH_HOST_02" "${SSH_PORT_02:-}" ||
+      do_print_warn "$(do_stack_trace)" 'do_ssh_add_known_host() ->' "$?"
+    local -r chain="$(do_ssh_print_chain "$target")"
+    do_ssh_exec "$chain" define_cidoer_core define_cidoer_print run_on_target ||
+      do_print_warn "$(do_stack_trace)" $'run_on_target() ->' "$?"
+    ssh-agent -k
+  }
+  local -r jumper="${SSH_USER_01:-upload}@${SSH_HOST_01:?}:${SSH_PORT_01:-22}"
+  local -r target="${SSH_USER_02:-debian}@${SSH_HOST_02:?}"
+  local -r chain="$(do_ssh_print_chain "$jumper")"
+  do_ssh_export_reset
+  do_ssh_export SSH_HOST_02 SSH_KEY_02_PASSPHRASE run_on_target target
+  do_ssh_exec "$chain" \
+    define_cidoer_print define_cidoer_core define_cidoer_ssh define_cidoer_lock run_on_jumper ||
+    do_print_warn "$(do_stack_trace)" 'run_on_jumper() ->' "$?"
+}
+
 test_ssh_archive_dir() {
   [ -z "${SSH_HOST_01:-}" ] && {
     do_print_warn "$(do_stack_trace)" 'Absent env SSH_HOST_01'
@@ -79,7 +106,18 @@ test_ssh_archive_dir() {
   popd >/dev/null || return $?
 }
 
-test_ssh_prepare && do_print_section test_ssh_prepare
+_on_exit() {
+  ssh-agent -k || do_print_warn "$(do_stack_trace)" 'ssh-agent -k ->' "$?"
+  [ -n "${SSH_HOST_01:-}" ] && ssh-keygen -R "$SSH_HOST_01"
+  do_print_warn "$(do_stack_trace)" 'exiting'
+}
+trap _on_exit SIGINT SIGTERM SIGHUP SIGQUIT EXIT
+
+test_ssh_prepare
+do_print_section test_ssh_prepare
 test_ssh_exec && do_print_section test_ssh_exec
-test_ssh_exec_chained && do_print_section test_ssh_exec_chained
+#test_ssh_exec_chained && do_print_section test_ssh_exec_chained
+test_ssh_exec_jumped && do_print_section test_ssh_exec_jumped
 test_ssh_archive_dir && do_print_section test_ssh_archive_dir
+
+ssh-agent -k || do_print_warn "$(do_stack_trace)" 'ssh-agent -k ->' "$?"
