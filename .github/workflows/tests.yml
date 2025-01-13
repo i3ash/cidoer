@@ -97,6 +97,7 @@ jobs:
             -e KEY_01="${{ secrets.KEY_01 }}" \
             -e SSH_USER_01="${{ vars.SSH_USER_01 }}" \
             -e SSH_HOST_01="${{ secrets.SSH_HOST_01 }}" \
+            -e SSH_HOST_02="${{ secrets.SSH_HOST_02 }}" \
             --tmpfs /mnt/bin:exec,size=2m \
             alpine sh -c "apk update && apk add bash openssh-client && bash additional.sh"
       - name: Run Additional Tests on Docker Debian
@@ -110,6 +111,7 @@ jobs:
             -e KEY_01="${{ secrets.KEY_01 }}" \
             -e SSH_USER_01="${{ vars.SSH_USER_01 }}" \
             -e SSH_HOST_01="${{ secrets.SSH_HOST_01 }}" \
+            -e SSH_HOST_02="${{ secrets.SSH_HOST_02 }}" \
             --tmpfs /mnt/bin:exec,size=2m \
             debian:stable-slim sh -c "apt-get update && apt-get install curl openssh-client -y && bash additional.sh"
 
@@ -122,6 +124,7 @@ jobs:
           KEY_01_PASSPHRASE: ${{ secrets.KEY_01_PASSPHRASE }}
           SSH_USER_01: ${{ vars.SSH_USER_01 }}
           SSH_HOST_01: ${{ secrets.SSH_HOST_01 }}
+          SSH_HOST_02: ${{ secrets.SSH_HOST_02 }}
         run: bash additional.sh
 
       - name: Setup Bats and Bats Libs

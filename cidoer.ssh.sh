@@ -15,8 +15,26 @@ define_cidoer_ssh() {
     }
   }
   do_ssh_check_dependencies() {
-    do_check_optional_cmd ssh-keygen expect shasum sha256sum
+    do_check_optional_cmd ssh-keygen expect shasum sha256sum realpath
     do_check_required_cmd ssh-agent ssh-add ssh-keyscan ssh tar gzip
+  }
+  do_ssh_make_bash() {
+    local line script=''
+    while IFS= read -r line; do
+      line="$(do_trim "$line")"
+      [ -z "$line" ] && continue
+      printf -v script '%s\n%s' "$script" "$line"
+      [[ "$line" == *' '* ]] || { declare -F "$line" >/dev/null && do_ssh_export "$line"; }
+    done <<<"$(printf "%s\n" "${@}")"
+    local var fun
+    for var in "${CIDOER_SSH_EXPORT_VAR[@]}"; do
+      printf -v script '%s\n%s' "$(declare -p "$var")" "$script"
+    done
+    for fun in "${CIDOER_SSH_EXPORT_FUN[@]}"; do
+      printf -v script '%s\n%s' "$(declare -f "$fun")" "$script"
+    done
+    printf -v script '%s\n%s\n%s\n%s' '#!/usr/bin/env bash' 'set -eu' 'set -o pipefail' "$script"
+    printf '%s\n' "$script"
   }
   do_ssh_exec() {
     local -r ssh="${1:-}"
@@ -25,28 +43,12 @@ define_cidoer_ssh() {
       return 1
     }
     [ $# -lt 2 ] && {
-      $ssh || return $?
+      LC_ALL='' $ssh || return $?
       return 0
     }
-    local line script=''
-    while IFS= read -r line; do
-      line="$(do_trim "$line")"
-      [ -z "$line" ] && continue
-      printf -v script '%s\n%s' "$script" "$line"
-      [[ "$line" == *' '* ]] || { declare -F "$line" >/dev/null && do_ssh_export "$line"; }
-    done <<<"$(printf "%s\n" "${@:2}")"
-    local var fun
-    for var in "${CIDOER_SSH_EXPORT_VAR[@]}"; do
-      printf -v script '%s\n%s' "$(declare -p "$var")" "$script"
-    done
-    for fun in "${CIDOER_SSH_EXPORT_FUN[@]}"; do
-      printf -v script '%s\n%s' "$(declare -f "$fun")" "$script"
-    done
-    # do_print_code_bash_debug "$(printf '%s\n#| %s -- /usr/bin/env bash -eu -o pipefail -s -' "$script" "$ssh")"
-    # printf '%s\n' "$script" | $ssh -- /usr/bin/env bash -eu -o pipefail -s -
-    printf -v script '%s\n%s\n%s\n%s' '#!/usr/bin/env bash' 'set -eu' 'set -o pipefail' "$script"
-    LC_ALL='' $ssh "$script" || local -r status="$?"
-    do_print_code_bash_debug "$(printf '%s\n#| %s' "$script" "$ssh")"
+    local -r bash="$(do_ssh_make_bash "${@:2}")"
+    { printf '%s\n' "$bash" | LC_ALL='' $ssh -- /usr/bin/env bash -s -; } || local -r status="$?"
+    do_print_code_bash_debug "$(printf '%s\n#| %s -- /usr/bin/env bash -s -' "$bash" "$ssh")"
     [ "${status:-0}" -eq 0 ] || return "${status:-0}"
   }
   do_ssh_archive_dir() {
@@ -60,13 +62,14 @@ define_cidoer_ssh() {
         return 1
       fi
     done
-    local resolved_path
-    resolved_path=$(realpath -q "$local_path" 2>/dev/null) || {
-      do_print_error "$(do_stack_trace)" "Error: Invalid path or insufficient permissions: $resolved_path" >&2
-      return 1
+    command -v realpath >/dev/null 2>&1 && {
+      local -r resolved_path=$(realpath "$local_path" 2>/dev/null) || {
+        do_print_error "$(do_stack_trace)" "Error: Invalid path or insufficient permissions: $resolved_path" >&2
+        return 1
+      }
     }
-    [ -d "$resolved_path" ] || {
-      do_print_error "$(do_stack_trace)" "Error: Not a directory: $resolved_path" >&2
+    [ -d "$local_path" ] || {
+      do_print_error "$(do_stack_trace)" "Error: Not a directory: $local_path" >&2
       return 1
     }
     detect_sha256_cmd() {
@@ -86,9 +89,16 @@ define_cidoer_ssh() {
     tar --no-xattrs --version >/dev/null 2>&1 && local -r tar_cmd='tar --no-xattrs'
     do_print_trace "$(do_stack_trace)" "<${tar_cmd:-tar} -cf - $local_path>" "<$ssh:$remote_path>"
     local -r local_hash=$(${tar_cmd:-tar} -cf - "$local_path" | gzip -n | $sha256_cmd | awk '{print $1}')
+    [ -n "${resolved_path:-}" ] && do_print_dash_pair 'realpath' "$resolved_path"
     do_print_dash_pair 'sha256sum_local' "$local_hash"
-    { ${tar_cmd:-tar} -cf - "$local_path" | gzip -n |
-      do_ssh_exec "$ssh" $'cat >${remote_path:?}'; } || local -r status="$?"
+    cat_with_ssh() {
+      local -r ssh="${1:?}"
+      local -r bash="$(do_ssh_make_bash $'cat >${remote_path:?}')"
+      LC_ALL='' $ssh "$bash" || local -r status="$?"
+      do_print_code_bash_debug "$(printf '%s\n#| %s' "$bash" "$ssh")"
+      [ "${status:-0}" -eq 0 ] || return "${status:-0}"
+    }
+    { ${tar_cmd:-tar} -cf - "$local_path" | gzip -n | cat_with_ssh "$ssh"; } || local -r status="$?"
     [ "${status:-0}" -eq 0 ] || {
       do_print_error "$(do_stack_trace)" "Error: Transfer failed with status ${status:-0}" >&2
       return "${status:-0}"
@@ -114,7 +124,7 @@ define_cidoer_ssh() {
       do_print_error "$(do_stack_trace)" "Error: Checksum verification failed" >&2
       return 3
     }
-    do_print_info "$(do_stack_trace)" "Transfer completed and verified successfully"
+    do_print_trace "$(do_stack_trace)" "Transfer completed and verified successfully"
   }
   do_ssh_export_reset() {
     CIDOER_SSH_EXPORT_FUN=()
