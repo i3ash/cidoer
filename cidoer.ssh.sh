@@ -182,7 +182,8 @@ define_cidoer_ssh() {
       options='-T -o ConnectTimeout=3'
       [ "${port}" -gt 0 ] && options="${options} -p ${port}"
       if [ -z "${chain:-}" ]; then
-        printf -v chain 'ssh %s %s' "${options}" "${user_host}"
+        if [ $# -gt 1 ]; then local -r first_hop='ssh -A'; else local -r first_hop='ssh'; fi
+        printf -v chain '%s %s %s' "${first_hop:?}" "${options}" "${user_host}"
       else
         printf -v chain '%s -- ssh %s %s' "${chain}" "${options}" "${user_host}"
       fi

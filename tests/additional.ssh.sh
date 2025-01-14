@@ -85,6 +85,7 @@ test_ssh_exec_jumped() {
   local -r jumper="${SSH_USER_01:-upload}@${SSH_HOST_01:?}:${SSH_PORT_01:-22}"
   local -r target="${SSH_USER_02:-debian}@${SSH_HOST_02:?}"
   local -r chain="$(do_ssh_print_chain "$jumper")"
+  do_print_trace "$chain"
   do_ssh_export_reset
   do_ssh_export SSH_HOST_02 SSH_KEY_02_PASSPHRASE run_on_target target
   do_ssh_exec "$chain" \
@@ -116,7 +117,7 @@ trap _on_exit SIGINT SIGTERM SIGHUP SIGQUIT EXIT
 test_ssh_prepare
 do_print_section test_ssh_prepare
 test_ssh_exec && do_print_section test_ssh_exec
-#test_ssh_exec_chained && do_print_section test_ssh_exec_chained
+test_ssh_exec_chained && do_print_section test_ssh_exec_chained
 test_ssh_exec_jumped && do_print_section test_ssh_exec_jumped
 test_ssh_archive_dir && do_print_section test_ssh_archive_dir
 

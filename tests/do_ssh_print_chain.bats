@@ -19,7 +19,7 @@ load ../cidoer.ssh.sh
 @test "do_ssh_print_chain | Multiple arguments" {
   run do_ssh_print_chain "user1@host1:2202" "user2@host2"
   [ "$status" -eq 0 ]
-  [[ "$output" == "ssh -T -o ConnectTimeout=3 -p 2202 user1@host1 -- ssh -T -o ConnectTimeout=3 user2@host2" ]]
+  [[ "$output" == "ssh -A -T -o ConnectTimeout=3 -p 2202 user1@host1 -- ssh -T -o ConnectTimeout=3 user2@host2" ]]
 }
 
 @test "do_ssh_print_chain | No arguments" {
