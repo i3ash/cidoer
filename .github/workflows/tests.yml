@@ -85,7 +85,7 @@ jobs:
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace/tests \
-            bash:4.4-alpine3.21 bash additional.sh
+            bash:4.4-alpine3.20 bash additional.sh
       - name: Run Additional Tests on Docker Alpine
         if: startsWith(runner.os, 'Linux')
         continue-on-error: false

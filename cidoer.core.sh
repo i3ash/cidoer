@@ -111,7 +111,7 @@ define_cidoer_core() {
   do_print_fix
   do_os_type() {
     [ -n "${CIDOER_OS_TYPE:-}" ] && {
-      printf '%s\n' "$CIDOER_OS_TYPE"
+      printf '%s\n' "${CIDOER_OS_TYPE:-}"
       return 0
     }
     if [ -z "${OSTYPE:-}" ]; then
@@ -124,7 +124,7 @@ define_cidoer_core() {
     cygwin* | msys* | mingw* | windows*) CIDOER_OS_TYPE='windows' ;;
     *) CIDOER_OS_TYPE='unknown' ;;
     esac
-    printf '%s\n' "$CIDOER_OS_TYPE"
+    printf '%s\n' "${CIDOER_OS_TYPE:-}"
   }
   do_host_type() {
     [ -n "${CIDOER_HOST_TYPE:-}" ] && {
@@ -354,14 +354,20 @@ define_cidoer_print() {
 }
 
 define_cidoer_lock() {
-  declare -F 'do_lock_release' >/dev/null && return 0
+  declare -F "do_lock_acquire" >/dev/null && return 0
   [ -z "${CIDOER_LOCK_BASE_DIR:-}" ] && {
-    CIDOER_LOCK_BASE_DIR='/cidoer/locks'
-    mkdir -p "/tmp$CIDOER_LOCK_BASE_DIR"
+    CIDOER_LOCK_BASE_DIR="/cidoer/locks"
+    mkdir -p "/tmp${CIDOER_LOCK_BASE_DIR}" || {
+      [ -d "/tmp${CIDOER_LOCK_BASE_DIR}" ] || do_print_error "Failed to create lock base directory"
+    }
   }
   [ -z "${CIDOER_LOCK_METHOD:-}" ] && {
     if command -v flock >/dev/null 2>&1; then
       CIDOER_LOCK_METHOD="flock"
+      if ! (flock -n 333 -c "true") 2>/dev/null; then
+        do_print_info "Warning: flock -n unsupported, fallback to mkdir lock."
+        CIDOER_LOCK_METHOD="mkdir"
+      fi
     elif command -v lockf >/dev/null 2>&1; then
       CIDOER_LOCK_METHOD="lockf"
     else
@@ -369,36 +375,47 @@ define_cidoer_lock() {
     fi
   }
   do_lock_release() {
-    local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
+    local -r lock_name="${1:-}"
+    local -r lock_path="/tmp${CIDOER_LOCK_BASE_DIR}/${lock_name}"
     [ -f "$lock_path/pid" ] && {
-      do_print_trace "Release lock on '${1:-}'"
+      do_print_trace "Release lock on '$lock_name'"
       rm -f "$lock_path/pid" || do_print_trace "Failed to remove pid file:" "$lock_path/pid" >&2
     }
     [ -d "$lock_path" ] && {
       rmdir "$lock_path" 2>/dev/null || do_print_trace "Failed to remove directory:" "$lock_path" >&2
     }
-    { exec 200>&-; } 2>/dev/null
-    { exec 201>&-; } 2>/dev/null
+    local -i i idx=-1
+    for i in "${!CIDOER_LOCK_NAMES[@]}"; do
+      if [ "${CIDOER_LOCK_NAMES[$i]}" = "$lock_name" ]; then
+        idx="$i"
+        break
+      fi
+    done
+    if [ "$idx" -ge 0 ]; then
+      local fd="${CIDOER_LOCK_FDS[$idx]}"
+      [ -n "$fd" ] && eval "exec $fd>&- 2>/dev/null" || true
+      unset "CIDOER_LOCK_NAMES[$idx]"
+      unset "CIDOER_LOCK_FDS[$idx]"
+    fi
   }
   do_lock_acquire() {
-    local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
-    local -r lock_dir="${1:-}"
-    local -i -r max_attempts="${2:-20}"
-    _input_lock_dir="$lock_dir"
-    _lock_release_on_sig() {
-      do_lock_release "${_input_lock_dir:-}"
-    }
-    trap _lock_release_on_sig EXIT INT TERM
-    local -r pid_file="$lock_path/pid"
-    local -i pid attempt=1 lock_acquired=0
+    local -r lock_name="${1:-}"
+    local -r lock_path="/tmp${CIDOER_LOCK_BASE_DIR}/${lock_name}"
+    local -r max_attempts="${2:-20}"
+    local -r pid_file="${lock_path}/pid"
     local -r try_func="do_lock_try_${CIDOER_LOCK_METHOD:-mkdir}"
+    local -i attempt=1
+    local -i lock_acquired=0
     while [ "$attempt" -le "$max_attempts" ] && [ "$lock_acquired" -eq 0 ]; do
-      [ -d "$lock_path" ] && [ -f "$pid_file" ] && {
-        pid="$(cat "$pid_file" 2>/dev/null)"
-        [[ "$pid" =~ ^[0-9]+$ ]] && ! kill -0 "$pid" 2>/dev/null && do_lock_release "${lock_dir:-}"
-      }
-      do_print_trace "Try to lock '$lock_dir' with" "$try_func". "[$attempt/$max_attempts]"
-      if "$try_func" "${lock_dir:-}"; then
+      if [ -d "$lock_path" ] && [ -f "$pid_file" ]; then
+        local pid
+        pid=$(cat "$pid_file" 2>/dev/null)
+        if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+          do_lock_release "$lock_name"
+        fi
+      fi
+      do_print_trace "Try to lock '$lock_name' with ${try_func}. [${attempt}/${max_attempts}]"
+      if "$try_func" "$lock_name"; then
         lock_acquired=1
         break
       fi
@@ -408,35 +425,61 @@ define_cidoer_lock() {
     [ "$lock_acquired" -eq 1 ] && return 0 || return 1
   }
   do_lock_try_flock() {
-    local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
     command -v flock >/dev/null 2>&1 || return 1
+    local -r lock_name="${1:-}"
+    local -r lock_path="/tmp${CIDOER_LOCK_BASE_DIR}/${lock_name}"
     mkdir -p "$lock_path" 2>/dev/null || return 1
-    { exec 200>"$lock_path/pid"; } 2>/dev/null || return 1
-    flock -n 200 2>/dev/null && {
+    local -r fd=$(_lock_next_fd) || return 2
+    eval "exec $fd>\"$lock_path/pid\"" 2>/dev/null || return 3
+    if flock -n "$fd" 2>/dev/null; then
       printf '%s\n' "$$" >"$lock_path/pid"
+      CIDOER_LOCK_NAMES[${#CIDOER_LOCK_NAMES[@]}]="$lock_name"
+      CIDOER_LOCK_FDS[${#CIDOER_LOCK_FDS[@]}]="$fd"
       return 0
-    }
-    { exec 200>&-; } 2>/dev/null
+    fi
+    eval "exec $fd>&- 2>/dev/null" || true
     return 1
   }
   do_lock_try_lockf() {
-    local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
     command -v lockf >/dev/null 2>&1 || return 1
+    local -r lock_name="${1:-}"
+    local -r lock_path="/tmp${CIDOER_LOCK_BASE_DIR}/${lock_name}"
     mkdir -p "$lock_path" 2>/dev/null || return 1
-    { exec 201>"$lock_path/pid"; } 2>/dev/null || return 1
-    lockf -t 0 201 2>/dev/null && {
+    local -r fd=$(_lock_next_fd) || return 2
+    eval "exec $fd>\"$lock_path/pid\"" 2>/dev/null || return 3
+    if lockf -t 0 "$fd" 2>/dev/null; then
       printf '%s\n' "$$" >"$lock_path/pid"
+      CIDOER_LOCK_NAMES[${#CIDOER_LOCK_NAMES[@]}]="$lock_name"
+      CIDOER_LOCK_FDS[${#CIDOER_LOCK_FDS[@]}]="$fd"
       return 0
-    }
-    { exec 201>&-; } 2>/dev/null
+    fi
+    eval "exec $fd>&- 2>/dev/null" || true
     return 1
   }
   do_lock_try_mkdir() {
-    local -r lock_path="/tmp$CIDOER_LOCK_BASE_DIR/${1:-}"
-    mkdir "$lock_path" 2>/dev/null && {
+    local -r lock_name="${1:-}"
+    local -r lock_path="/tmp${CIDOER_LOCK_BASE_DIR}/${lock_name}"
+    if mkdir "$lock_path" 2>/dev/null; then
       printf '%s\n' "$$" >"$lock_path/pid"
+      CIDOER_LOCK_NAMES[${#CIDOER_LOCK_NAMES[@]}]="$lock_name"
+      CIDOER_LOCK_FDS[${#CIDOER_LOCK_FDS[@]}]=''
       return 0
-    }
+    fi
+    return 1
+  }
+  _lock_next_fd() {
+    local -r max_fd=2048
+    local fd="${_CIDOER_LOCK_FD_START:=200}"
+    while ((fd <= max_fd)); do
+      if (true >&"$fd") 2>/dev/null; then
+        fd=$((fd + 1))
+      else
+        _CIDOER_LOCK_FD_START=$((fd + 1))
+        printf '%s' "$fd"
+        return 0
+      fi
+    done
+    do_print_error "$(do_stack_trace)" "Error: No free FD found between 200 and $max_fd." >&2
     return 1
   }
 }
@@ -693,8 +736,11 @@ define_cidoer_check() {
 declare CIDOER_DEBUG
 declare CIDOER_OS_TYPE
 declare CIDOER_HOST_TYPE
+
 declare CIDOER_LOCK_BASE_DIR
 declare CIDOER_LOCK_METHOD
+declare -a CIDOER_LOCK_NAMES=()
+declare -a CIDOER_LOCK_FDS=()
 
 declare -a CIDOER_TPUT_COLORS=()
 declare CIDOER_NO_COLOR

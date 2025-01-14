@@ -83,5 +83,13 @@ do_func_invoke do_http_fetch 'https://raw.githubusercontent.com/i3ash/cidoer/ref
 #do_func_invoke do_http_fetch 'http://this-domain-does-not-exist.invalid'
 do_print_dash_pair 'do_os_type' "$(do_os_type)"
 do_print_dash_pair 'do_host_type' "$(do_host_type)"
+
+do_lock_acquire 'lock_200.dir' || exit 101
+do_lock_acquire 'lock_201.dir' || exit 102
+
 printf '%s\n' "$(bash --version)"
+
+do_lock_release 'lock_200.dir'
+do_lock_release 'lock_201.dir'
+
 do_print_section
