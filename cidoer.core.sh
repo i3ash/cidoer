@@ -11,8 +11,8 @@ define_core_utils() {
     printf 'Error: This script requires Bash 3.2 or newer.' >&2
     exit 32
   fi
-  define_cidoer_core
   define_cidoer_print
+  define_cidoer_core
   define_cidoer_lock
   define_cidoer_file
   define_cidoer_git
@@ -88,15 +88,25 @@ define_cidoer_core() {
     printf '%s' "${trimmed%"${trimmed##*[![:space:]]}"}"
   }
   do_print_fix() {
-    declare -F 'do_stack_trace' >/dev/null || { do_stack_trace() { printf ''; }; }
-    declare -F 'do_tint' >/dev/null || { do_tint() { printf '%s\n' "- ${*:2}"; }; }
-    declare -F 'do_print_trace' >/dev/null || { do_print_trace() { printf '%s\n' "- $*"; }; }
-    declare -F 'do_print_info' >/dev/null || { do_print_info() { printf '%s\n' "= $*"; }; }
-    declare -F 'do_print_warn' >/dev/null || { do_print_warn() { printf '%s\n' "? $*"; }; }
-    declare -F 'do_print_error' >/dev/null || { do_print_error() { printf '%s\n' "! $*"; }; }
-    declare -F 'do_print_section' >/dev/null || { do_print_section() { printf '%s\n' "== $*"; }; }
-    declare -F 'do_print_dash_pair' >/dev/null || { do_print_dash_pair() { printf '%s\n' "-- $*"; }; }
-    declare -F 'do_print_code_lines' >/dev/null || { do_print_code_lines() { printf '%s\n' "$*"; }; }
+    declare -F 'do_stack_trace' >/dev/null || do_stack_trace() { printf ''; }
+    declare -F 'do_tint' >/dev/null || do_tint() { printf '%s\n' "- ${*:2}"; }
+    declare -F 'do_print_trace' >/dev/null || do_print_trace() { printf '%s\n' "- $*"; }
+    declare -F 'do_print_info' >/dev/null || do_print_info() { printf '%s\n' "= $*"; }
+    declare -F 'do_print_warn' >/dev/null || do_print_warn() { printf '%s\n' "? $*"; }
+    declare -F 'do_print_error' >/dev/null || do_print_error() { printf '%s\n' "! $*"; }
+    declare -F 'do_print_section' >/dev/null || do_print_section() { printf '%s\n' "== $*"; }
+    declare -F 'do_print_dash_pair' >/dev/null || do_print_dash_pair() { printf '%s\n' "-- $*"; }
+    declare -F 'do_print_code_lines' >/dev/null || do_print_code_lines() { printf '%s\n' "$*"; }
+    declare -F 'do_print_code_bash' >/dev/null || do_print_code_bash() { do_print_code_lines "$@"; }
+    declare -F 'do_print_code_bash_fn' >/dev/null || do_print_code_bash_fn() { do_print_code_bash "$(declare -f "$@")"; }
+    declare -F 'do_print_code_bash_debug' >/dev/null || do_print_code_bash_debug() {
+      [ "${CIDOER_DEBUG:-no}" != "yes" ] && return 0
+      do_print_code_bash "$@" >&2
+    }
+    declare -F 'do_print_debug' >/dev/null || do_print_debug() {
+      [ "${CIDOER_DEBUG:-no}" != "yes" ] && return 0
+      do_print_code_lines "$@" >&2
+    }
   }
   do_print_fix
   do_os_type() {
@@ -208,7 +218,8 @@ define_cidoer_print() {
     local -r magenta="${CIDOER_COLOR_MAGENTA:-magenta}"
     [ "$#" -gt 1 ] && local -r lang="$1"
     do_tint "$magenta" '#---|--------------------' "${stack}"
-    if [ ${#CIDOER_TPUT_COLORS[@]} -gt 0 ] &&
+    if [ "${CIDOER_NO_COLOR:-no}" != 'yes' ] &&
+      [ ${#CIDOER_TPUT_COLORS[@]} -gt 0 ] &&
       command -v bat >/dev/null 2>&1 &&
       bat --list-languages | sed 's/[:,]/ /g' | grep -q " ${lang:-}"; then
       bat --language "${lang:-}" --paging never --number <<<"${*:2}" 2>/dev/null && {
@@ -247,7 +258,7 @@ define_cidoer_print() {
     done
     local -ra messages=("${args[@]:$i}")
     [ ${#messages[@]} -eq 0 ] && return 0
-    [ -z "$styles" ] && {
+    [ -z "$styles" ] || [ "${CIDOER_NO_COLOR:-no}" = 'yes' ] && {
       printf "%s\n" "${messages[*]}"
       return 0
     }
@@ -283,6 +294,7 @@ define_cidoer_print() {
       local -r tp_colors=$($tp_cmd colors 2>/dev/null || printf '0')
     fi
     CIDOER_TPUT_COLORS=()
+    [ "${CIDOER_NO_COLOR:-no}" = 'yes' ] && return 0
     if [ "${tp_colors:-0}" -gt 0 ]; then
       CIDOER_TPUT_COLORS=(
         "reset=$($tp_cmd sgr0)"
@@ -451,10 +463,11 @@ define_cidoer_file() {
     do_print_trace "$(do_stack_trace)" "<$file1>" "<$file2>"
     [ ! -f "$file1" ] && file1='/dev/null'
     [ ! -f "$file2" ] && file2='/dev/null'
-    local color_r color_g reset
-    color_r="${CIDOER_COLOR_RED:-$(do_lookup_color red)}"
-    color_g="${CIDOER_COLOR_GREEN:-$(do_lookup_color green)}"
-    reset="$(do_lookup_color reset)"
+    [ "${CIDOER_NO_COLOR:-no}" != 'yes' ] && [ "${#CIDOER_TPUT_COLORS[@]}" -gt 0 ] && {
+      local -r color_r="${CIDOER_COLOR_RED:-$(do_lookup_color red)}"
+      local -r color_g="${CIDOER_COLOR_GREEN:-$(do_lookup_color green)}"
+      local -r reset="${CIDOER_COLOR_RESET:-$(do_lookup_color reset)}"
+    }
     diff -U0 "$file1" "$file2" | awk "
       /^@/ {
         split(\$0, parts,    \" \")
@@ -464,10 +477,10 @@ define_cidoer_file() {
         new_line = substr(new[1], 2)
         next
       }
-      /^-/  { printf \"$color_r-|%03d| %s$reset\n\", old_line++, substr(\$0,2) }
-      /^\+/ { printf \"$color_g+|%03d| %s$reset\n\", new_line++, substr(\$0,2) }
+      /^-/  { printf \"${color_r:-}-|%03d| %s${reset:-}\n\", old_line++, substr(\$0,2) }
+      /^\+/ { printf \"${color_g:-}+|%03d| %s${reset:-}\n\", new_line++, substr(\$0,2) }
     "
-    local diff_status="${PIPESTATUS[0]}"
+    local -r diff_status="${PIPESTATUS[0]}"
     [ "$diff_status" -ne 0 ] && [ "$diff_status" -ne 1 ] && {
       do_print_error 'diff command failed with status' "$diff_status"
       return "$diff_status"
@@ -683,7 +696,9 @@ declare CIDOER_HOST_TYPE
 declare CIDOER_LOCK_BASE_DIR
 declare CIDOER_LOCK_METHOD
 
-declare -a CIDOER_TPUT_COLORS
+declare -a CIDOER_TPUT_COLORS=()
+declare CIDOER_NO_COLOR
+declare CIDOER_COLOR_RESET
 declare CIDOER_COLOR_BLACK
 declare CIDOER_COLOR_RED
 declare CIDOER_COLOR_GREEN

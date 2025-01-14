@@ -1,20 +1,26 @@
 #!/usr/bin/env bash
 set -eu -o pipefail
 
+#CIDOER_NO_COLOR='yes'
 source ../cidoer.core.sh
 
-CIDOER_COLOR_BLACK='\033[38;2;20;20;20m'
-CIDOER_COLOR_RED='\033[38;2;237;106;101m'
-CIDOER_COLOR_GREEN='\033[38;2;70;210;70m'
-CIDOER_COLOR_YELLOW='\033[38;2;190;190;0m'
-CIDOER_COLOR_BLUE='\033[38;2;86;136;239m'
-CIDOER_COLOR_MAGENTA='\033[38;2;168;136;246m'
-CIDOER_COLOR_CYAN='\033[38;2;124;206;243m'
-CIDOER_COLOR_WHITE='\033[38;2;185;185;185m'
-CIDOER_COLOR_ERROR='\033[48;2;237;106;101m\033[38;2;0;0;0m'
+customise_color_scheme() {
+  CIDOER_COLOR_RESET='\033[0m'
+  CIDOER_COLOR_BLACK='\033[38;2;20;20;20m'
+  CIDOER_COLOR_RED='\033[38;2;237;106;101m'
+  CIDOER_COLOR_GREEN='\033[38;2;70;210;70m'
+  CIDOER_COLOR_YELLOW='\033[38;2;190;190;0m'
+  CIDOER_COLOR_BLUE='\033[38;2;86;136;239m'
+  CIDOER_COLOR_MAGENTA='\033[38;2;168;136;246m'
+  CIDOER_COLOR_CYAN='\033[38;2;124;206;243m'
+  CIDOER_COLOR_WHITE='\033[38;2;185;185;185m'
+  CIDOER_COLOR_ERROR='\033[48;2;237;106;101m\033[38;2;0;0;0m'
+}
+
 #CIDOER_TPUT_COLORS=()
 
-[ ${#CIDOER_TPUT_COLORS[@]} -gt 0 ] && {
+[ "${CIDOER_NO_COLOR:-no}" != 'yes' ] && [ ${#CIDOER_TPUT_COLORS[@]} -gt 0 ] && {
+  customise_color_scheme
   for line in "${CIDOER_TPUT_COLORS[@]}"; do
     printf "${line#*=}+++ ${line%%=*} +++$(do_lookup_color reset)%s\n"
   done
@@ -24,7 +30,7 @@ do_print_section 'do_print_section'
 do_print_trace "do_print_trace"
 do_print_info "do_print_info"
 do_print_warn "do_print_warn"
-do_tint "$CIDOER_COLOR_BLACK" $'do_tint $CIDOER_COLOR_BLACK'
+do_tint "${CIDOER_COLOR_BLACK:-}" $'do_tint $CIDOER_COLOR_BLACK'
 do_tint blue 'do_tint blue'
 do_tint magenta 'do_tint magenta'
 # https://en.wikipedia.org/wiki/ANSI_escape_code
