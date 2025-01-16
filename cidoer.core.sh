@@ -87,15 +87,19 @@ define_cidoer_core() {
     local -r trimmed="${value#"${value%%[![:space:]]*}"}"
     printf '%s' "${trimmed%"${trimmed##*[![:space:]]}"}"
   }
+  _is_bats_core() {
+    [[ -n "${BATS_TEST_NAME:-}" ]] || [[ "$(ps -o comm= $PPID)" == "bats" ]]
+  }
   do_trap_append() {
     local -r new_cmd="$1" && shift
     local sig old_cmd
     for sig in "$@"; do
+      _is_bats_core && [[ "$sig" == "EXIT" || "$sig" == "ERR" ]] && continue
       old_cmd="$(trap -p "$sig" | sed -E "s/trap -- '(.*)' $sig/\1/")"
       if [[ -z "$old_cmd" || "$old_cmd" == "SIG_IGN" || "$old_cmd" == "SIG_DFL" ]]; then
         trap -- "$new_cmd" "$sig"
       else
-        trap -- "$old_cmd; $new_cmd" "$sig"
+        trap -- "$(printf "%s; %s" "$old_cmd" "$new_cmd")" "$sig"
       fi
     done
   }
@@ -103,11 +107,12 @@ define_cidoer_core() {
     local -r new_cmd="$1" && shift
     local sig old_cmd
     for sig in "$@"; do
+      _is_bats_core && [[ "$sig" == "EXIT" || "$sig" == "ERR" ]] && continue
       old_cmd="$(trap -p "$sig" | sed -E "s/trap -- '(.*)' $sig/\1/")"
       if [[ -z "$old_cmd" || "$old_cmd" == "SIG_IGN" || "$old_cmd" == "SIG_DFL" ]]; then
         trap -- "$new_cmd" "$sig"
       else
-        trap -- "$new_cmd; $old_cmd" "$sig"
+        trap -- "$(printf "%s; %s" "$new_cmd" "$old_cmd")" "$sig"
       fi
     done
   }
@@ -441,7 +446,7 @@ define_cidoer_lock() {
       do_print_trace "Try to lock '$lock_name' with ${try_func}. [${attempt}/${max_attempts}]"
       if "$try_func" "$lock_name"; then
         lock_acquired=1
-        do_trap_prepend "do_lock_release $lock_name" EXIT SIGHUP SIGINT SIGQUIT SIGTERM
+        do_trap_prepend "do_lock_release $lock_name || :" EXIT SIGHUP SIGINT SIGQUIT SIGTERM || :
         return 0
       fi
       sleep $((attempt < 5 ? 1 : 3))
