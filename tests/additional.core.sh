@@ -1,4 +1,5 @@
 #!/usr/bin/env bash
+# shellcheck disable=SC2317
 set -eu -o pipefail
 
 #CIDOER_NO_COLOR='yes'
@@ -84,12 +85,21 @@ do_func_invoke do_http_fetch 'https://raw.githubusercontent.com/i3ash/cidoer/ref
 do_print_dash_pair 'do_os_type' "$(do_os_type)"
 do_print_dash_pair 'do_host_type' "$(do_host_type)"
 
+final_cleanup() {
+  do_print_trace "$(do_stack_trace)" "Performing cleanup..."
+}
+do_trap_append 'final_cleanup' EXIT SIGHUP SIGINT SIGQUIT SIGTERM
+
 do_lock_acquire 'lock_200.dir' || exit 101
 do_lock_acquire 'lock_201.dir' || exit 102
+do_print_section Ending
+#do_lock_release 'lock_200.dir'
+#do_lock_release 'lock_201.dir'
 
-printf '%s\n' "$(bash --version)"
-
-do_lock_release 'lock_200.dir'
-do_lock_release 'lock_201.dir'
-
-do_print_section
+final_cleanup_done() {
+  printf '%s\n' "$(bash --version)"
+  do_print_trace "$(do_stack_trace)" "${@}"
+}
+do_trap_append "final_cleanup_done $(do_host_type) $(do_os_type)" EXIT
+trap -p
+do_print_section Ended

@@ -87,6 +87,30 @@ define_cidoer_core() {
     local -r trimmed="${value#"${value%%[![:space:]]*}"}"
     printf '%s' "${trimmed%"${trimmed##*[![:space:]]}"}"
   }
+  do_trap_append() {
+    local -r new_cmd="$1" && shift
+    local sig old_cmd
+    for sig in "$@"; do
+      old_cmd="$(trap -p "$sig" | sed -E "s/trap -- '(.*)' $sig/\1/")"
+      if [[ -z "$old_cmd" || "$old_cmd" == "SIG_IGN" || "$old_cmd" == "SIG_DFL" ]]; then
+        trap -- "$new_cmd" "$sig"
+      else
+        trap -- "$old_cmd; $new_cmd" "$sig"
+      fi
+    done
+  }
+  do_trap_prepend() {
+    local -r new_cmd="$1" && shift
+    local sig old_cmd
+    for sig in "$@"; do
+      old_cmd="$(trap -p "$sig" | sed -E "s/trap -- '(.*)' $sig/\1/")"
+      if [[ -z "$old_cmd" || "$old_cmd" == "SIG_IGN" || "$old_cmd" == "SIG_DFL" ]]; then
+        trap -- "$new_cmd" "$sig"
+      else
+        trap -- "$new_cmd; $old_cmd" "$sig"
+      fi
+    done
+  }
   do_print_fix() {
     declare -F 'do_stack_trace' >/dev/null || do_stack_trace() { printf ''; }
     declare -F 'do_tint' >/dev/null || do_tint() { printf '%s\n' "- ${*:2}"; }
@@ -393,7 +417,7 @@ define_cidoer_lock() {
     done
     if [ "$idx" -ge 0 ]; then
       local fd="${CIDOER_LOCK_FDS[$idx]}"
-      [ -n "$fd" ] && eval "exec $fd>&- 2>/dev/null" || true
+      { [ -n "$fd" ] && eval "exec $fd>&- 2>/dev/null"; } || true
       unset "CIDOER_LOCK_NAMES[$idx]"
       unset "CIDOER_LOCK_FDS[$idx]"
     fi
@@ -417,12 +441,13 @@ define_cidoer_lock() {
       do_print_trace "Try to lock '$lock_name' with ${try_func}. [${attempt}/${max_attempts}]"
       if "$try_func" "$lock_name"; then
         lock_acquired=1
-        break
+        do_trap_prepend "do_lock_release $lock_name" EXIT SIGHUP SIGINT SIGQUIT SIGTERM
+        return 0
       fi
       sleep $((attempt < 5 ? 1 : 3))
       attempt=$((attempt + 1))
     done
-    [ "$lock_acquired" -eq 1 ] && return 0 || return 1
+    return 1
   }
   do_lock_try_flock() {
     command -v flock >/dev/null 2>&1 || return 1
@@ -729,7 +754,7 @@ define_cidoer_check() {
   }
   do_core_check_dependencies() {
     do_check_optional_cmd tput bat git curl wget flock lockf
-    do_check_required_cmd printenv awk diff || return $?
+    do_check_required_cmd printenv sed awk diff || return $?
   }
 }
 
