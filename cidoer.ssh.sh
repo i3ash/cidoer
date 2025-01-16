@@ -252,7 +252,7 @@ define_cidoer_ssh() {
     [ -z "${key_dir:-}" ] && local -r key_dir=$(mktemp -d || :)
     local -r _tmp_file="${key_dir:-/tmp}/_key_file_$$"
     _rm_in_ssh_add_key() { local -r file=${1:-} && [ -n "$file" ] && [ -f "$file" ] && { rm -f "$file" || :; }; }
-    do_trap_append "_rm_in_ssh_add_key \"$_tmp_file\" || :" EXIT SIGHUP SIGINT SIGQUIT SIGTERM || true
+    do_trap_append "_rm_in_ssh_add_key $_tmp_file || :" EXIT SIGHUP SIGINT SIGQUIT SIGTERM || true
     local -r key0="$(printf '%s' "$key" | tr -d '\r')"
     printf '%b' "$key0\n" >"${_tmp_file:-}"
     chmod 400 "$_tmp_file"
@@ -263,21 +263,18 @@ define_cidoer_ssh() {
   do_ssh_add_key_file() {
     local path="${1:-}"
     local passphrase_name="${2:-}"
-    local rc=0
     if ! [ -f "$path" ]; then
       do_print_warn 'Error: Require path of key file.' "$path" >&2
       return 1
     fi
     if ssh-keygen -y -f "$path" -P '' >/dev/null 2>&1; then
       do_print_warn 'Warn: Key with passphrase is recommended.' "$path" >&2
-      ssh-add "$path"
-      rc=$?
-      return $rc
+      ssh-add "$path" || return $?
+      return 0
     fi
     if [ -z "$passphrase_name" ]; then
-      ssh-add "$path"
-      rc=$?
-      return $rc
+      ssh-add "$path" || return $?
+      return 0
     fi
     local -r pass="${!passphrase_name:-}"
     if [ -z "$pass" ]; then
@@ -300,25 +297,20 @@ define_cidoer_ssh() {
       catch wait result
       exit [lindex \$result 3]
 ______expect
-      rc=$?
-      if [ "$rc" -ne 0 ]; then do_print_warn 'Warn: ssh-add failed' >&2; fi
+      local -r rc=$?
+      [ "$rc" -ne 0 ] && do_print_warn 'Warn: ssh-add failed' >&2
       return "$rc"
     fi
-    local bin_dir
-    if [ -d /mnt/bin ]; then bin_dir="/mnt/bin"; else bin_dir=$(mktemp -d); fi
-    _askpass_script="$bin_dir/_askpass_script_$$"
-    _cleanup_askpass_script() {
-      if ! [ -f "${_askpass_script:-}" ]; then return 0; fi
-      rm -f "${_askpass_script}"
-      unset _askpass_script
-    }
-    #do_trap_append "_cleanup_askpass_script || :" EXIT || :
+    if [ -d /mnt/bin ]; then local -r bin_dir="/mnt/bin"; else local -r bin_dir=$(mktemp -d); fi
+    local -r _askpass_script="${bin_dir:?}/_askpass_script_$$"
+    _rm_askpass() { local -r file=${1:-} && [ -n "$file" ] && [ -f "$file" ] && { rm -f "$file" || :; }; }
+    do_trap_append "_rm_askpass $_askpass_script || :" EXIT SIGHUP SIGINT SIGQUIT SIGTERM || true
     printf '#!/usr/bin/env bash\n%s\n' "printf '%s\n' \"$pass\"" >"${_askpass_script:-}"
     chmod 500 "$_askpass_script"
     do_print_trace "ssh-add with SSH_ASKPASS"
     DISPLAY=:0 SSH_ASKPASS="$_askpass_script" ssh-add "$path" </dev/null >/dev/null 2>&1
     rc=$?
-    _cleanup_askpass_script
+    _rm_askpass "$_askpass_script" || true
     return $rc
   }
 }
