@@ -242,28 +242,23 @@ define_cidoer_ssh() {
     do_lock_release "$lock_dir"
   }
   do_ssh_add_key() {
-    local key="${1:-}"
-    local passphrase_name="${2:-}"
-    if [ -z "$key" ]; then
+    local -r key="${1:-}"
+    local -r passphrase_name="${2:-}"
+    [ -z "$key" ] && {
       do_print_warn 'Error: Require private key content.' >&2
       return 1
-    fi
-    local key_dir
-    if [ -d /mnt/bin ]; then key_dir="/mnt/bin"; else key_dir=$(mktemp -d); fi
-    _tmp_file="$key_dir/_key_file_$$"
-    _cleanup_tmp_file() {
-      if ! [ -f "${_tmp_file:-}" ]; then return 0; fi
-      rm -f "${_tmp_file}"
-      unset _tmp_file
     }
-    trap _cleanup_tmp_file EXIT
-    key="$(printf '%s' "$key" | tr -d '\r')"
-    printf '%b' "$key\n" >"${_tmp_file:-}"
+    [ -d /mnt/bin ] && local -r key_dir="/mnt/bin"
+    [ -z "${key_dir:-}" ] && local -r key_dir=$(mktemp -d || :)
+    local -r _tmp_file="${key_dir:-/tmp}/_key_file_$$"
+    _rm_in_ssh_add_key() { local -r file=${1:-} && [ -n "$file" ] && [ -f "$file" ] && { rm -f "$file" || :; }; }
+    do_trap_append "_rm_in_ssh_add_key \"$_tmp_file\" || :" EXIT SIGHUP SIGINT SIGQUIT SIGTERM || true
+    local -r key0="$(printf '%s' "$key" | tr -d '\r')"
+    printf '%b' "$key0\n" >"${_tmp_file:-}"
     chmod 400 "$_tmp_file"
-    do_ssh_add_key_file "$_tmp_file" "$passphrase_name"
-    local rc=$?
-    _cleanup_tmp_file
-    return $rc
+    do_ssh_add_key_file "$_tmp_file" "$passphrase_name" || local -r code=$?
+    _rm_in_ssh_add_key "$_tmp_file" || true
+    return "${code:-0}"
   }
   do_ssh_add_key_file() {
     local path="${1:-}"
@@ -317,7 +312,7 @@ ______expect
       rm -f "${_askpass_script}"
       unset _askpass_script
     }
-    trap _cleanup_askpass_script EXIT
+    #do_trap_append "_cleanup_askpass_script || :" EXIT || :
     printf '#!/usr/bin/env bash\n%s\n' "printf '%s\n' \"$pass\"" >"${_askpass_script:-}"
     chmod 500 "$_askpass_script"
     do_print_trace "ssh-add with SSH_ASKPASS"

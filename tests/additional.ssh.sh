@@ -108,11 +108,11 @@ test_ssh_archive_dir() {
 }
 
 _on_exit() {
-  ssh-agent -k || do_print_warn "$(do_stack_trace)" 'ssh-agent -k ->' "$?"
-  [ -n "${SSH_HOST_01:-}" ] && ssh-keygen -R "$SSH_HOST_01"
   do_print_warn "$(do_stack_trace)" 'exiting'
+  ssh-agent -k 2>/dev/null || do_print_warn "$(do_stack_trace)" 'ssh-agent -k ->' "$?"
+  [ -n "${SSH_HOST_01:-}" ] && ssh-keygen -R "$SSH_HOST_01"
 }
-trap _on_exit SIGINT SIGTERM SIGHUP SIGQUIT EXIT
+do_trap_append '_on_exit || :' EXIT SIGHUP SIGINT SIGQUIT SIGTERM
 
 test_ssh_prepare
 do_print_section test_ssh_prepare
@@ -121,4 +121,5 @@ test_ssh_exec_chained && do_print_section test_ssh_exec_chained
 test_ssh_exec_jumped && do_print_section test_ssh_exec_jumped
 test_ssh_archive_dir && do_print_section test_ssh_archive_dir
 
-ssh-agent -k || do_print_warn "$(do_stack_trace)" 'ssh-agent -k ->' "$?"
+trap -p
+do_print_section Ended
