@@ -422,7 +422,7 @@ define_cidoer_lock() {
     done
     if [ "$idx" -ge 0 ]; then
       local fd="${CIDOER_LOCK_FDS[$idx]}"
-      { [ -n "$fd" ] && eval "exec $fd>&- 2>/dev/null"; } || true
+      { [ -n "$fd" ] && eval "exec $fd>&-" 2>/dev/null; } || true
       unset "CIDOER_LOCK_NAMES[$idx]"
       unset "CIDOER_LOCK_FDS[$idx]"
     fi
