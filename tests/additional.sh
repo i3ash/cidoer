@@ -12,6 +12,8 @@ done
 for i in {232..255}; do printf '\e[48;5;%dm \e[38;5;0m%03d \e[0m' "$i" "$i"; done
 printf '\n'
 
+/usr/bin/env bash additional.jff.sh || do_print_warn 'bash additional.jff.sh returned' "$?"
+
 source ../cidoer.core.sh
 
 /usr/bin/env bash additional.core.sh || do_print_warn 'bash additional.core.sh returned' "$?"
