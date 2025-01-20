@@ -5,10 +5,16 @@ set -eou pipefail
 
 define_cidoer_jff() {
   declare -F 'do_print_24bit_bitmap' >/dev/null && return 0
-  do_print_24bit_bitmap() {
-    local -r bmp_file="${1:-}" tile="${2:-000}"
+  do_print_bitmap_8bits() {
+    _print_bitmap "${1:-}" "${2:-}" 8
+  }
+  do_print_bitmap_24bits() {
+    _print_bitmap "${1:-}" "${2:-}" 24
+  }
+  _print_bitmap() {
+    local -r bmp_file="${1:-}" tile="${2:-000}" color_bits="${3:-24}"
     if [ -z "$bmp_file" ]; then
-      printf 'Usage: %s <bmp_file_path> [tiled_chars]\n' "${FUNCNAME[0]}" >&2
+      printf 'Usage: %s <bmp_file_path> [color_bits] [tiled_chars]\n' "${FUNCNAME[0]}" >&2
       return 1
     fi
     if ! [ -f "$bmp_file" ]; then
@@ -70,6 +76,14 @@ define_cidoer_jff() {
           local Bd=$((16#$B))
           local Gd=$((16#$G))
           local Rd=$((16#$R))
+          [ "$color_bits" -eq 8 ] && {
+            local R6=$((Rd / 51))
+            local G6=$((Gd / 51))
+            local B6=$((Bd / 51))
+            local color_index=$((16 + 36 * R6 + 6 * G6 + B6))
+            printf '\033[38;5;%dm%s\033[0m' "$color_index" "$tile"
+            continue
+          }
           printf '\033[38;2;%d;%d;%dm%s\033[0m' "$Rd" "$Gd" "$Bd" "$tile"
         done
         printf '\n'
