@@ -88,7 +88,9 @@ define_cidoer_core() {
     printf '%s' "${trimmed%"${trimmed##*[![:space:]]}"}"
   }
   _is_bats_core() {
-    [[ -n "${BATS_TEST_NAME:-}" ]] || [[ "$(ps -o comm= $PPID)" == "bats" ]]
+    [[ -n "${BATS_TEST_NAME:-}" ]] && return 0
+    [[ -e /dev/fd/3 ]] && [[ "$(readlink /dev/fd/3)" == *"/bats-core"* ]] && return 0
+    return 1
   }
   do_trap_append() {
     local -r new_cmd="$1" && shift
