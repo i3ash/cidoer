@@ -33,8 +33,7 @@ define_cidoer_ssh() {
     for fun in "${CIDOER_SSH_EXPORT_FUN[@]}"; do
       printf -v script '%s\n%s' "$(declare -f "$fun")" "$script"
     done
-    printf -v script '%s\n%s\n%s\n%s' '#!/usr/bin/env bash' 'set -eu' 'set -o pipefail' "$script"
-    printf '%s\n' "$script"
+    printf '%s\n%s\n%s\n%s\n' '#!/usr/bin/env bash' 'set -eu' 'set -o pipefail' "$script"
   }
   do_ssh_exec() {
     local -r ssh="${1:-}"
@@ -192,7 +191,7 @@ define_cidoer_ssh() {
     # Chained / Nested SSH command for multi-hop connections
   }
   do_ssh_add_known_host() {
-    if ! command -v ssh-keyscan &>/dev/null; then
+    if ! command -v ssh-keyscan >/dev/null 2>&1; then
       do_print_warn "ssh-keyscan is not available. Please install it." >&2
       return 1
     fi

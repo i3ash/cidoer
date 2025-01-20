@@ -59,17 +59,9 @@ test_ssh_exec_chained() {
   do_print_code_bash "$(declare -f demo_fn)"
 }
 
-test_ssh_exec_jumped() {
-  [ -z "${SSH_HOST_02:-}" ] && {
-    do_print_warn "$(do_stack_trace)" 'Absent env SSH_HOST_02'
-    return 1
-  }
-  run_on_target() {
-    do_print_trace "$(do_stack_trace)" "$(uname -a)"
-    do_print_trace "$(do_stack_trace)" "$(id)"
-    return 0
-  }
-  run_on_jumper() {
+define_jumper_do() {
+  do_print_section "JUMPER WORKFLOW STEPS BEGIN"
+  jumper_do_prepare() {
     do_print_trace "$(do_stack_trace)" "$(uname -a)"
     do_print_trace "$(do_stack_trace)" "$(id)"
     eval "$(ssh-agent -s)" || return $?
@@ -77,20 +69,41 @@ test_ssh_exec_jumped() {
       do_print_warn "$(do_stack_trace)" 'do_ssh_add_key_file() ->' "$?"
     do_ssh_add_known_host "$SSH_HOST_02" "${SSH_PORT_02:-}" ||
       do_print_warn "$(do_stack_trace)" 'do_ssh_add_known_host() ->' "$?"
-    local -r chain="$(do_ssh_print_chain "$target")"
-    do_ssh_exec "$chain" define_cidoer_core define_cidoer_print run_on_target ||
-      do_print_warn "$(do_stack_trace)" $'run_on_target() ->' "$?"
-    ssh-agent -k
+    printf '%s %s\n' "$(do_stack_trace)" '---------- ---------- ----------'
   }
+  jumper_do_process() {
+    run_on_target() {
+      do_print_trace "$(do_stack_trace)" "$(uname -a)"
+      do_print_trace "$(do_stack_trace)" "$(id)"
+      return 0
+    }
+    local -r chain="$(do_ssh_print_chain "${TARGET_02:?}")"
+    do_ssh_exec "$chain" define_cidoer_print define_cidoer_core run_on_target ||
+      do_print_warn "$(do_stack_trace)" $'do_ssh_exec run_on_target() ->' "$?"
+    printf '%s %s\n' "$(do_stack_trace)" '---------- ---------- ----------'
+  }
+  jumper_do_finish() {
+    ssh-agent -k
+    printf '%s %s\n' "$(do_stack_trace)" '---------- ---------- ----------'
+    do_print_section "JUMPER WORKFLOW STEPS DONE!"
+  }
+}
+test_ssh_exec_jumped() {
+  [ -z "${SSH_HOST_02:-}" ] && {
+    do_print_warn "$(do_stack_trace)" 'Absent env SSH_HOST_02'
+    return 1
+  }
+  local -rx TARGET_02="${SSH_USER_02:-debian}@${SSH_HOST_02:?}"
   local -r jumper="${SSH_USER_01:-upload}@${SSH_HOST_01:?}:${SSH_PORT_01:-22}"
-  local -r target="${SSH_USER_02:-debian}@${SSH_HOST_02:?}"
   local -r chain="$(do_ssh_print_chain "$jumper")"
-  do_print_trace "$chain"
+  do_print_trace "$chain" >&2
   do_ssh_export_reset
-  do_ssh_export SSH_HOST_02 SSH_KEY_02_PASSPHRASE run_on_target target
-  do_ssh_exec "$chain" \
-    define_cidoer_print define_cidoer_core define_cidoer_ssh define_cidoer_lock run_on_jumper ||
-    do_print_warn "$(do_stack_trace)" 'run_on_jumper() ->' "$?"
+  do_ssh_export SSH_HOST_02 SSH_KEY_02_PASSPHRASE TARGET_02
+  #CIDOER_DEBUG='yes'
+  do_ssh_exec "$chain" define_cidoer_print define_cidoer_core define_cidoer_ssh define_cidoer_lock \
+    define_jumper_do 'do_workflow_job jumper_do prepare process finish' ||
+    do_print_warn "$(do_stack_trace)" 'do_ssh_exec jumper_do() ->' "$?"
+  CIDOER_DEBUG='no'
 }
 
 test_ssh_archive_dir() {

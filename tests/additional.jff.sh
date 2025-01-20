@@ -5,4 +5,4 @@ set -eu -o pipefail
 
 do_print_bitmap_8bits ./kid.bmp || exit $?
 do_print_bitmap_24bits ./kid.bmp || exit $?
-do_print_24bit_bitmap || :
+do_print_bitmap_24bits || :
