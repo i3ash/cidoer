@@ -6,64 +6,87 @@ set -eou pipefail
 define_cidoer_jff() {
   declare -F 'do_print_24bit_bitmap' >/dev/null && return 0
   do_print_24bit_bitmap() {
-    local -r bmp_file="${1:-}"
-    if [ -z "$bmp_file" ] || [ ! -f "$bmp_file" ]; then
-      printf 'Usage: %s <bmp_file_path>\n' "${FUNCNAME[0]}"
+    local -r bmp_file="${1:-}" tile="${2:-000}"
+    if [ -z "$bmp_file" ]; then
+      printf 'Usage: %s <bmp_file_path> [tiled_chars]\n' "${FUNCNAME[0]}" >&2
       return 1
     fi
-    local -r signature=$(_hex_read "$bmp_file" 0 2) || return $?
+    if ! [ -f "$bmp_file" ]; then
+      printf 'Not a file: %s\n' "$bmp_file" >&2
+      return 1
+    fi
+    local header_hex
+    header_hex=$(_hex_read "$bmp_file" 0 54) || return $?
+    local -r signature="${header_hex:0:4}"
     if [ "$signature" != "424d" ]; then
-      printf "This file is not a standard BMP (no 'BM' signature detected).\n"
+      printf "This file is not a standard BMP (no 'BM' signature detected)\n" >&2
       return 1
     fi
-    local -r bpp_hex=$(_hex_read "$bmp_file" 0x1c 2) || return $?
-    local -r bpp="$(_hex_le16_to_dec "$bpp_hex")"
+    local -r bpp_offset=$((28 * 2))
+    local -r bpp=$(_hex_le16_to_dec "${header_hex:bpp_offset:4}")
     if [ "$bpp" -ne 24 ]; then
-      printf 'Only 24-bit uncompressed BMP is supported. Current bpp=%d\n' "$bpp"
+      printf 'Only 24-bit uncompressed BMP is supported. Current bpp=%d\n' "$bpp" >&2
       return 1
     fi
-    local -r comp_hex=$(_hex_read "$bmp_file" 0x1e 4) || return $?
-    local -r compression="$(_hex_le32_to_dec "$comp_hex")"
+    local -r comp_offset=$((30 * 2))
+    local -r compression=$(_hex_le32_to_dec "${header_hex:comp_offset:8}")
     if [ "$compression" -ne 0 ]; then
-      printf 'Compressed BMP files are not supported (compression=%d).\n' "$compression"
+      printf 'Compressed BMP files are not supported (compression=%d)\n' "$compression" >&2
       return 1
     fi
-    local -r width_hex=$(_hex_read "$bmp_file" 0x12 4) || return $?
-    local -r height_hex=$(_hex_read "$bmp_file" 0x16 4) || return $?
-    local -r offset_hex=$(_hex_read "$bmp_file" 0x0a 4) || return $?
-    local -r size_hex=$(_hex_read "$bmp_file" 0x22 4) || return $?
-    local -r width="$(_hex_le32_to_dec "$width_hex")"
-    local -r height="$(_hex_le32_to_dec "$height_hex")"
-    local -r data_offset="$(_hex_le32_to_dec "$offset_hex")"
-    local -r image_size="$(_hex_le32_to_dec "$size_hex")"
-    [ "$image_size" -eq 0 ] && image_size=$((width * height * 3))
+    local -r data_offset_offset=$((10 * 2))
+    local -r data_offset=$(_hex_le32_to_dec "${header_hex:data_offset_offset:8}")
+    local -r width_offset=$((18 * 2))
+    local -r width=$(_hex_le32_to_dec "${header_hex:width_offset:8}")
+    local -r height_offset=$((22 * 2))
+    local -r height=$(_hex_le32_to_dec "${header_hex:height_offset:8}")
     local -r row_bytes=$((((width * 3) + 3) & ~3))
-    local col row row_data
-    for ((row = height - 1; row >= 0; row--)); do
-      local row_offset=$((data_offset + row * row_bytes))
-      row_data=$(_hex_read "$bmp_file" "$row_offset" $((width * 3))) || return $?
-      for ((col = 0; col < width; col++)); do
-        local start=$((col * 6))
-        local B="${row_data:start:2}"
-        local G="${row_data:start+2:2}"
-        local R="${row_data:start+4:2}"
-        local Bd=$((16#$B))
-        local Gd=$((16#$G))
-        local Rd=$((16#$R))
-        #printf '\033[48;2;%d;%d;%dm%s\033[0m' "${Rd}" "${Gd}" "${Bd}" '   '
-        printf '\033[38;2;%d;%d;%dm%s\033[0m' "${Rd}" "${Gd}" "${Bd}" '000'
+    local -r max_chunk_bytes="${CIDOER_READ_CHUNK_BYTES:-1048576}"
+    local max_rows_for_chunk
+    max_rows_for_chunk=$((max_chunk_bytes / row_bytes))
+    [ "$max_rows_for_chunk" -lt 1 ] && max_rows_for_chunk=1
+    [ "$max_rows_for_chunk" -gt "$height" ] && max_rows_for_chunk="$height"
+    local -r chunk_rows="$max_rows_for_chunk"
+    local current_row=$((height - 1))
+    while [ "$current_row" -ge 0 ]; do
+      local rows_left=$((current_row + 1))
+      local rows_to_read="$chunk_rows"
+      [ "$rows_left" -lt "$chunk_rows" ] && rows_to_read="$rows_left"
+      local chunk_start_row=$((current_row - (rows_to_read - 1)))
+      local file_offset=$((data_offset + chunk_start_row * row_bytes))
+      local chunk_bytes=$((rows_to_read * row_bytes))
+      local chunk_hex
+      chunk_hex=$(_hex_read "$bmp_file" "$file_offset" "$chunk_bytes") || return $?
+      local row_hex_length=$((row_bytes * 2))
+      local -i row col
+      for ((row = rows_to_read - 1; row >= 0; row--)); do
+        local row_start=$((row * row_hex_length))
+        local row_hex="${chunk_hex:row_start:row_hex_length}"
+        for ((col = 0; col < width; col++)); do
+          local pixel_start=$((col * 6))
+          local B="${row_hex:pixel_start:2}"
+          local G="${row_hex:pixel_start+2:2}"
+          local R="${row_hex:pixel_start+4:2}"
+          local Bd=$((16#$B))
+          local Gd=$((16#$G))
+          local Rd=$((16#$R))
+          printf '\033[38;2;%d;%d;%dm%s\033[0m' "$Rd" "$Gd" "$Bd" "$tile"
+        done
+        printf '\n'
       done
-      printf '\n'
+      current_row=$((current_row - rows_to_read))
     done
   }
   _hex_read() {
     local -r file="${1:-}" offset="${2:-}" length="${3:-}"
-    if command -v xxd >/dev/null 2>&1; then
-      xxd -p -l "$length" -s "$offset" "$file" | tr -d '\n'
+    if command -v od >/dev/null 2>&1; then
+      od -An -tx1 -j "$offset" -N "$length" "$file" | tr -d ' \n'
     elif command -v hexdump >/dev/null 2>&1; then
       hexdump -v -e '1/1 "%02x"' -s "$offset" -n "$length" "$file" | tr -d '\n'
+    elif command -v xxd >/dev/null 2>&1; then
+      xxd -p -l "$length" -s "$offset" "$file" | tr -d '\n'
     else
-      return 1
+      return 120
     fi
   }
   _hex_le16_to_dec() {
