@@ -678,12 +678,9 @@ define_cidoer_git() {
       }
     done
     local -r exact=$(git tag --points-at HEAD 2>/dev/null | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
-    [ -n "$exact" ] && {
-      printf '%s' "$exact"
-      return 0
-    }
+    [ -n "$exact" ] && printf '%s' "$exact" && return 0
     local -r latest=$(git tag --merged HEAD 2>/dev/null | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
-    [ -n "$latest" ] && printf '%s' "${latest}"
+    [ -n "$latest" ] && printf '%s' "$latest"
   }
   do_git_count_commits_since() {
     if [ ${#} -le 0 ] || [ -z "$1" ]; then
