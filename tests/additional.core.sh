@@ -69,11 +69,16 @@ do_file_diff _diff_v1.txt _diff_v2.txt || do_print_info 'do_file_diff returned' 
 do_print_section do_file_diff
 
 source ./cidoer.sh
+define_docker() {
+  do_print_section "DOCKER STEPS BEGIN"
+  docker_done() { do_print_section "DOCKER STEPS DONE!"; }
+}
 do_workflow_job build
 do_workflow_job upload
 do_workflow_job deploy
 do_workflow_job verify init 'do'
-do_workflow_job docker step1 step2 step3
+do_workflow_job docker step1 step2 step3 'done'
+do_workflow_job docker step1 step2 step3 'done'
 
 do_print_dash_pair 'do_git_version_tag' "$(do_git_version_tag)"
 do_print_dash_pair 'do_git_count_commits_since' "$(do_git_count_commits_since "$(do_git_version_tag)")"

@@ -40,12 +40,16 @@ define_cidoer_core() {
       steps+=("$step")
     done
     [ ${#steps[@]} -le 0 ] && steps+=('do')
-    local -r upper=$(printf '%s' "$job_type" | tr '[:lower:]' '[:upper:]')
     local -r lower=$(printf '%s' "$job_type" | tr '[:upper:]' '[:lower:]')
-    do_print_section "${upper} STEPS BEGIN"
-    do_func_invoke "define_${lower}" || return $?
-    for step in "${steps[@]}"; do do_func_invoke "${lower}_${step}" || return $?; done
-    do_print_section "${upper} STEPS DONE!"
+    for step in "${steps[@]}"; do
+      declare -F "${lower}_${step}" >/dev/null && local -r defined=1 && break
+    done
+    [ "${defined:-0}" -eq 1 ] || {
+      do_func_invoke "define_${lower}" || return $?
+    }
+    for step in "${steps[@]}"; do
+      do_func_invoke "${lower}_${step}" || return $?
+    done
   }
   do_func_invoke() {
     declare -F 'do_stack_trace' >/dev/null || do_print_fix
