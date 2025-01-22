@@ -15,8 +15,8 @@ define_cidoer_print() {
       [ 'do_func_invoke' != "${FUNCNAME[$idx]}" ] && filtered_fns+=("${FUNCNAME[$idx]}")
     done
     if [ ${#filtered_fns[@]} -gt 0 ]; then
-      printf '%s --> %s\n' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}" "${filtered_fns[*]}"
-    else printf '%s -->\n' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}"; fi
+      printf '%s --> %s\n' "${USER:-$(id -un 2>/dev/null)}@${HOSTNAME:-$(hostname 2>/dev/null)}" "${filtered_fns[*]}"
+    else printf '%s -->\n' "${USER:-$(id -un 2>/dev/null)}@${HOSTNAME:-$(hostname 2>/dev/null)}"; fi
     return $status
   }
   do_print_with_color() {
@@ -30,6 +30,7 @@ define_cidoer_print() {
   do_print_warn() { do_tint "${CIDOER_COLOR_YELLOW:-yellow}" "${@}"; }
   do_print_error() { do_tint "${CIDOER_COLOR_ERROR:-red}" bold "${@}"; }
   do_print_os_env() {
+    command -v printenv >/dev/null 2>&1 || return 127
     local key value
     while IFS='=' read -r key value; do
       do_print_dash_pair "$key" "$value"
@@ -69,7 +70,7 @@ define_cidoer_print() {
   }
   do_print_code_bash_fn() { do_print_code_bash "$(declare -f "$@")"; }
   do_print_code_bash() {
-    do_print_with_color && command -v bat >/dev/null 2>&1 && {
+    do_print_with_color && do_check_bat_available && {
       do_print_code_lines 'bash' "$@"
       return 0
     }
@@ -81,7 +82,7 @@ define_cidoer_print() {
     local -r magenta="${CIDOER_COLOR_MAGENTA:-magenta}"
     [ "$#" -gt 1 ] && local -r lang="$1"
     do_tint "$magenta" '#---|--------------------' "${stack}"
-    if do_print_with_color && command -v bat >/dev/null 2>&1 &&
+    if do_print_with_color && do_check_bat_available &&
       bat --list-languages | sed 's/[:,]/ /g' | grep -q " ${lang:-}"; then
       bat --language "${lang:-}" --paging never --number <<<"${*:2}" 2>/dev/null && {
         do_tint "$magenta" '#---|--------------------' "${stack}" "${lang:-}"
@@ -212,10 +213,22 @@ define_cidoer_print() {
     fi
   }
   do_reset_tput
-  do_bats_core_check() {
+  do_check_bats_core() {
     [[ -n "${BATS_TEST_NUMBER:-}" ]] && return 0
     [[ -n "${BATS_TEST_NAME:-}" ]] && return 0
     return 1
+  }
+  do_check_bat_available() {
+    [ -n "${CIDOER_BAT_AVAILABLE:-}" ] && {
+      [ "${CIDOER_BAT_AVAILABLE:-}" = 'yes' ] && return 0
+      return 1
+    }
+    for cmd in bat grep sed; do
+      command -v "$cmd" >/dev/null 2>&1 || {
+        CIDOER_BAT_AVAILABLE='no' && return 1
+      }
+    done
+    CIDOER_BAT_AVAILABLE='yes'
   }
 }
 
@@ -227,12 +240,12 @@ declare CIDOER_COLOR_BLUE
 declare CIDOER_COLOR_MAGENTA
 declare CIDOER_COLOR_CYAN
 declare CIDOER_COLOR_WHITE
-
 declare CIDOER_COLOR_RESET
-declare CIDOER_COLOR_ERROR
-
 declare CIDOER_NO_COLOR
+declare CIDOER_COLOR_ERROR
 declare -a CIDOER_TPUT_COLORS=()
+declare CIDOER_BAT_AVAILABLE
 
+# id hostname date printenv tput grep sed bat
 define_cidoer_print
-do_bats_core_check || do_print_dash_pair 'CIDOER_BASH_SOURCE_PRINT' "${BASH_SOURCE[0]}"
+do_check_bats_core || do_print_dash_pair 'CIDOER_BASH_SOURCE_PRINT' "${BASH_SOURCE[*]}"

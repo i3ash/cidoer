@@ -3,16 +3,6 @@
 declare -F 'define_cidoer_core' >/dev/null && return 0
 set -eu -o pipefail
 
-define_core_utils() {
-  declare -F 'do_workflow_job' >/dev/null && return 0
-  define_cidoer_core
-  define_cidoer_lock
-  define_cidoer_file
-  define_cidoer_git
-  define_cidoer_http
-  define_cidoer_check
-}
-
 define_cidoer_core() {
   declare -F 'do_workflow_job' >/dev/null && return 0
   do_workflow_job() {
@@ -88,7 +78,7 @@ define_cidoer_core() {
     local -r new_cmd="$1" && shift
     local sig old_cmd
     for sig in "$@"; do
-      do_bats_core_check && [[ "$sig" == "EXIT" || "$sig" == "ERR" ]] && continue
+      do_check_bats_core && [[ "$sig" == "EXIT" || "$sig" == "ERR" ]] && continue
       old_cmd="$(trap -p "$sig" | sed -E "s/trap -- '(.*)' $sig/\1/")"
       if [[ -z "$old_cmd" || "$old_cmd" == "SIG_IGN" || "$old_cmd" == "SIG_DFL" ]]; then
         trap -- "$new_cmd" "$sig"
@@ -101,7 +91,7 @@ define_cidoer_core() {
     local -r new_cmd="$1" && shift
     local sig old_cmd
     for sig in "$@"; do
-      do_bats_core_check && [[ "$sig" == "EXIT" || "$sig" == "ERR" ]] && continue
+      do_check_bats_core && [[ "$sig" == "EXIT" || "$sig" == "ERR" ]] && continue
       old_cmd="$(trap -p "$sig" | sed -E "s/trap -- '(.*)' $sig/\1/")"
       if [[ -z "$old_cmd" || "$old_cmd" == "SIG_IGN" || "$old_cmd" == "SIG_DFL" ]]; then
         trap -- "$new_cmd" "$sig"
@@ -149,6 +139,53 @@ define_cidoer_core() {
     esac
     printf '%s\n' "$CIDOER_HOST_TYPE"
   }
+  do_check_installed() {
+    if [ "$#" -le 0 ] || [ -z "$1" ]; then
+      do_print_warn "$(do_stack_trace)" $'$1 (cmd) is required'
+      return 2
+    fi
+    local cmd="$1" cmd_path
+    cmd_path=$(command -v "${cmd}" 2>/dev/null)
+    if [ -n "${cmd_path}" ] && [ -x "${cmd_path}" ]; then
+      do_print_dash_pair "${cmd}" "${cmd_path}"
+      return 0
+    fi
+    return 1
+  }
+  do_check_optional_cmd() {
+    do_print_dash_pair 'Optional Commands'
+    local cmd
+    for cmd in "${@}"; do
+      if ! do_check_installed "$cmd"; then
+        do_print_dash_pair "${cmd}" ''
+      fi
+    done
+  }
+  do_check_required_cmd() {
+    do_print_dash_pair 'Required Commands'
+    local cmd
+    local missing=0
+    for cmd in "${@}"; do
+      do_check_installed "$cmd" || {
+        do_print_dash_pair "${cmd}" "$(do_tint "${CIDOER_COLOR_RED:-red}" missing)"
+        missing=1
+      }
+    done
+    if [ "$missing" -eq 1 ]; then
+      do_print_error 'Please install the missing required commands and try again later.'
+      return 1
+    fi
+  }
+  do_check_bash_3_2() {
+    [ -z "$BASH_VERSION" ] && return 1
+    ((BASH_VERSINFO[0] < 3 || (BASH_VERSINFO[0] == 3 && BASH_VERSINFO[1] < 2))) && return 1
+    return 0
+  }
+  do_check_bats_core() {
+    [[ -n "${BATS_TEST_NUMBER:-}" ]] && return 0
+    [[ -n "${BATS_TEST_NAME:-}" ]] && return 0
+    return 1
+  }
   do_print_fix() {
     declare -F 'do_tint' >/dev/null || do_tint() { printf '%s\n' "- ${*:2}"; }
     declare -F 'do_print_with_color' >/dev/null || do_print_with_color() { return 1; }
@@ -186,11 +223,6 @@ define_cidoer_core() {
     }
   }
   do_print_fix
-  do_bats_core_check() {
-    [[ -n "${BATS_TEST_NUMBER:-}" ]] && return 0
-    [[ -n "${BATS_TEST_NAME:-}" ]] && return 0
-    return 1
-  }
 }
 
 define_cidoer_lock() {
@@ -326,6 +358,7 @@ define_cidoer_lock() {
 }
 
 define_cidoer_file() {
+  declare -F "do_file_diff" >/dev/null && return 0
   do_file_diff() {
     command -v diff >/dev/null 2>&1 || {
       do_print_error "Command diff is not available."
@@ -474,6 +507,7 @@ define_cidoer_file() {
 }
 
 define_cidoer_git() {
+  declare -F "do_git_version_tag" >/dev/null && return 0
   do_git_version_tag() {
     local -r exact=$(git tag --points-at HEAD 2>/dev/null | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
     [ -n "$exact" ] && printf '%s' "$exact" && return 0
@@ -493,6 +527,7 @@ define_cidoer_git() {
 }
 
 define_cidoer_http() {
+  declare -F "do_http_fetch" >/dev/null && return 0
   do_http_fetch() {
     local address="${1:?Usage: do_http_fetch <URL> [output]}"
     local output="${2:-}"
@@ -520,55 +555,6 @@ define_cidoer_http() {
   }
 }
 
-define_cidoer_check() {
-  do_check_installed() {
-    if [ "$#" -le 0 ] || [ -z "$1" ]; then
-      do_print_warn "$(do_stack_trace)" $'$1 (cmd) is required'
-      return 2
-    fi
-    local cmd="$1" cmd_path
-    cmd_path=$(command -v "${cmd}" 2>/dev/null)
-    if [ -n "${cmd_path}" ] && [ -x "${cmd_path}" ]; then
-      do_print_dash_pair "${cmd}" "${cmd_path}"
-      return 0
-    fi
-    return 1
-  }
-  do_check_optional_cmd() {
-    do_print_dash_pair 'Optional Commands'
-    local cmd
-    for cmd in "${@}"; do
-      if ! do_check_installed "$cmd"; then
-        do_print_dash_pair "${cmd}" ''
-      fi
-    done
-  }
-  do_check_required_cmd() {
-    do_print_dash_pair 'Required Commands'
-    local cmd
-    local missing=0
-    for cmd in "${@}"; do
-      do_check_installed "$cmd" || {
-        do_print_dash_pair "${cmd}" "$(do_tint "${CIDOER_COLOR_RED:-red}" missing)"
-        missing=1
-      }
-    done
-    if [ "$missing" -eq 1 ]; then
-      do_print_error 'Please install the missing required commands and try again later.'
-      return 1
-    fi
-  }
-  do_core_check_dependencies() {
-    do_check_optional_cmd tput bat git curl wget flock lockf
-    do_check_required_cmd printenv sed awk diff || return $?
-  }
-  do_check_bash_3_2() {
-    [ -z "$BASH_VERSION" ] && return 1
-    ((BASH_VERSINFO[0] < 3 || (BASH_VERSINFO[0] == 3 && BASH_VERSINFO[1] < 2))) && return 1
-    return 0
-  }
-}
-
 declare CIDOER_DEBUG
 declare CIDOER_OS_TYPE
 declare CIDOER_HOST_TYPE
@@ -578,9 +564,13 @@ declare CIDOER_LOCK_METHOD
 declare -a CIDOER_LOCK_NAMES=()
 declare -a CIDOER_LOCK_FDS=()
 
-define_core_utils
-do_bats_core_check || do_print_dash_pair 'CIDOER_BASH_SOURCE_CORE' "${BASH_SOURCE[0]}"
+define_cidoer_core
 do_check_bash_3_2 || {
   printf 'Error: This script requires Bash 3.2 or newer.\n' >&2
   exit 32
 }
+do_check_bats_core || do_print_dash_pair 'CIDOER_BASH_SOURCE_CORE' "${BASH_SOURCE[*]}"
+define_cidoer_lock
+define_cidoer_file
+define_cidoer_git
+define_cidoer_http

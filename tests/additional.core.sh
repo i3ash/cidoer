@@ -54,6 +54,10 @@ do_print_debug '// This is a debug message'
 CIDOER_DEBUG='no'
 do_print_section
 
+do_core_check_dependencies() {
+  do_check_optional_cmd tput bat git curl wget flock lockf
+  do_check_required_cmd printenv sed awk diff || return $?
+}
 do_core_check_dependencies
 do_print_dash_pair
 do_print_section
