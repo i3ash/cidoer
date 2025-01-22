@@ -475,13 +475,6 @@ define_cidoer_file() {
 
 define_cidoer_git() {
   do_git_version_tag() {
-    local cmd
-    for cmd in git grep sort tail; do
-      command -v "$cmd" >/dev/null 2>&1 || {
-        do_print_warn 'WARNING: Required command is missing:' " $cmd" >&2
-        return 0
-      }
-    done
     local -r exact=$(git tag --points-at HEAD 2>/dev/null | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
     [ -n "$exact" ] && printf '%s' "$exact" && return 0
     local -r latest=$(git tag --merged HEAD 2>/dev/null | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
