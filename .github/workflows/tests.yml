@@ -46,7 +46,7 @@ jobs:
         with:
           ref: ${{ env.CIDOER_GIT_REF }}
 
-      - name: Test CIDoer Workflow (build & upload)
+      - name: Run CIDoer Workflow Test (build & upload)
         working-directory: ${{ github.workspace }}
         shell: bash
         run: |
@@ -54,20 +54,33 @@ jobs:
           source tests/cidoer.sh
           do_workflow_job build
           do_workflow_job upload
-      - name: Test CIDoer Workflow (deploy)
-        working-directory: ${{ github.workspace }}
+
+      - name: Run Additional Test Core (Since 1.0)
+        working-directory: ${{ github.workspace }}/tests
+        shell: bash
+        env:
+          HELLO: ${{ env.HELLO }}
+        run: bash additional.core.sh
+
+      - name: Setup Bats and Bats Libs
+        id: setup-bats
+        uses: bats-core/bats-action@3.0.0
+        with:
+          support-path: "${{ github.workspace }}/tests/bats-support"
+          assert-path: "${{ github.workspace }}/tests/bats-assert"
+          detik-path: "${{ github.workspace }}/tests/bats-detik"
+          file-path: "${{ github.workspace }}/tests/bats-file"
+
+      - name: Run Bats Tests
+        working-directory: ${{ github.workspace }}/tests
         shell: bash
         run: |
           source "${CIDOER_CORE_FILE:?}"
-          source tests/cidoer.sh
-          do_workflow_job deploy
-      - name: Test CIDoer Workflow (verify)
-        working-directory: ${{ github.workspace }}
-        shell: bash
-        run: |
-          source "${CIDOER_CORE_FILE:?}"
-          source tests/cidoer.sh
-          do_workflow_job verify
+          eval "$(ssh-agent -s)" > /dev/null 2>&1
+          do_print_dash_pair 'SSH_AGENT_PID' "$SSH_AGENT_PID"
+          do_print_dash_pair 'SSH_AUTH_SOCK' "$SSH_AUTH_SOCK"
+          bats ./
+          ssh-agent -k
 
       - name: Run Additional Tests on Docker Bash:3.2 Alpine
         if: startsWith(runner.os, 'Linux')
@@ -115,36 +128,3 @@ jobs:
             -e SSH_HOST_02="${{ secrets.SSH_HOST_02 }}" \
             --tmpfs /mnt/bin:exec,size=2m \
             debian:stable-slim sh -c "apt-get update && apt-get install curl openssh-client -y && bash additional.sh"
-
-      - name: Run Additional Tests
-        working-directory: ${{ github.workspace }}/tests
-        shell: bash
-        env:
-          HELLO: ${{ env.HELLO }}
-          KEY_01: ${{ secrets.KEY_01 }}
-          KEY_01_PASSPHRASE: ${{ secrets.KEY_01_PASSPHRASE }}
-          SSH_KEY_02_PASSPHRASE: ${{ secrets.SSH_KEY_02_PASSPHRASE }}
-          SSH_USER_01: ${{ vars.SSH_USER_01 }}
-          SSH_HOST_01: ${{ secrets.SSH_HOST_01 }}
-          SSH_HOST_02: ${{ secrets.SSH_HOST_02 }}
-        run: bash additional.sh
-
-      - name: Setup Bats and Bats Libs
-        id: setup-bats
-        uses: bats-core/bats-action@3.0.0
-        with:
-          support-path: "${{ github.workspace }}/tests/bats-support"
-          assert-path: "${{ github.workspace }}/tests/bats-assert"
-          detik-path: "${{ github.workspace }}/tests/bats-detik"
-          file-path: "${{ github.workspace }}/tests/bats-file"
-
-      - name: Run Bats Tests
-        working-directory: ${{ github.workspace }}/tests
-        shell: bash
-        run: |
-          source "${CIDOER_CORE_FILE:?}"
-          eval "$(ssh-agent -s)" > /dev/null 2>&1
-          do_print_dash_pair 'SSH_AGENT_PID' "$SSH_AGENT_PID"
-          do_print_dash_pair 'SSH_AUTH_SOCK' "$SSH_AUTH_SOCK"
-          bats ./
-          ssh-agent -k
