@@ -88,33 +88,31 @@ jobs:
       - name: Run Additional Tests on Docker Alpine
         if: startsWith(runner.os, 'Linux')
         continue-on-error: false
-        env:
-          KEY_01: ${{ secrets.KEY_01 }}
-          KEY_01_PASSPHRASE: ${{ secrets.KEY_01_PASSPHRASE }}
-          SSH_HOST_01: ${{ secrets.SSH_HOST_01 }}
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace/tests \
-            -e KEY_01_PASSPHRASE="${KEY_01_PASSPHRASE:-}" \
-            -e KEY_01="${KEY_01:-}" \
-            -e SSH_HOST_01="${SSH_HOST_01:-}" \
+            -e KEY_01_PASSPHRASE="${{ secrets.KEY_01_PASSPHRASE }}" \
+            -e SSH_KEY_02_PASSPHRASE="${{ secrets.SSH_KEY_02_PASSPHRASE }}" \
+            -e KEY_01="${{ secrets.KEY_01 }}" \
+            -e SSH_USER_01="${{ vars.SSH_USER_01 }}" \
+            -e SSH_HOST_01="${{ secrets.SSH_HOST_01 }}" \
+            -e SSH_HOST_02="${{ secrets.SSH_HOST_02 }}" \
             --tmpfs /mnt/bin:exec,size=2m \
             alpine sh -c "apk update && apk add bash openssh-client && bash additional.sh"
       - name: Run Additional Tests on Docker Debian
         if: startsWith(runner.os, 'Linux')
         continue-on-error: false
-        env:
-          KEY_01: ${{ secrets.KEY_01 }}
-          KEY_01_PASSPHRASE: ${{ secrets.KEY_01_PASSPHRASE }}
-          SSH_HOST_01: ${{ secrets.SSH_HOST_01 }}
         run: |
           docker run --rm \
             -v ${{ github.workspace }}:/workspace \
             -w /workspace/tests \
-            -e KEY_01_PASSPHRASE="${KEY_01_PASSPHRASE:-}" \
-            -e KEY_01="${KEY_01:-}" \
-            -e SSH_HOST_01="${SSH_HOST_01:-}" \
+            -e KEY_01_PASSPHRASE="${{ secrets.KEY_01_PASSPHRASE }}" \
+            -e SSH_KEY_02_PASSPHRASE="${{ secrets.SSH_KEY_02_PASSPHRASE }}" \
+            -e KEY_01="${{ secrets.KEY_01 }}" \
+            -e SSH_USER_01="${{ vars.SSH_USER_01 }}" \
+            -e SSH_HOST_01="${{ secrets.SSH_HOST_01 }}" \
+            -e SSH_HOST_02="${{ secrets.SSH_HOST_02 }}" \
             --tmpfs /mnt/bin:exec,size=2m \
             debian:stable-slim sh -c "apt-get update && apt-get install curl openssh-client -y && bash additional.sh"
 
@@ -125,7 +123,10 @@ jobs:
           HELLO: ${{ env.HELLO }}
           KEY_01: ${{ secrets.KEY_01 }}
           KEY_01_PASSPHRASE: ${{ secrets.KEY_01_PASSPHRASE }}
+          SSH_KEY_02_PASSPHRASE: ${{ secrets.SSH_KEY_02_PASSPHRASE }}
+          SSH_USER_01: ${{ vars.SSH_USER_01 }}
           SSH_HOST_01: ${{ secrets.SSH_HOST_01 }}
+          SSH_HOST_02: ${{ secrets.SSH_HOST_02 }}
         run: bash additional.sh
 
       - name: Setup Bats and Bats Libs
@@ -140,4 +141,10 @@ jobs:
       - name: Run Bats Tests
         working-directory: ${{ github.workspace }}/tests
         shell: bash
-        run: bats ./
+        run: |
+          source "${CIDOER_CORE_FILE:?}"
+          eval "$(ssh-agent -s)" > /dev/null 2>&1
+          do_print_dash_pair 'SSH_AGENT_PID' "$SSH_AGENT_PID"
+          do_print_dash_pair 'SSH_AUTH_SOCK' "$SSH_AUTH_SOCK"
+          bats ./
+          ssh-agent -k
