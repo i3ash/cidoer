@@ -3,10 +3,12 @@
 set -eu -o pipefail
 
 #CIDOER_NO_COLOR='yes'
+source ../cidoer.print.sh
 source ../cidoer.core.sh
 
 customise_color_scheme() {
   CIDOER_COLOR_RESET='\033[0m'
+  CIDOER_COLOR_ERROR='\033[48;2;237;106;101m\033[38;2;0;0;0m'
   CIDOER_COLOR_BLACK='\033[38;2;20;20;20m'
   CIDOER_COLOR_RED='\033[38;2;237;106;101m'
   CIDOER_COLOR_GREEN='\033[38;2;70;210;70m'
@@ -15,7 +17,6 @@ customise_color_scheme() {
   CIDOER_COLOR_MAGENTA='\033[38;2;168;136;246m'
   CIDOER_COLOR_CYAN='\033[38;2;124;206;243m'
   CIDOER_COLOR_WHITE='\033[38;2;185;185;185m'
-  CIDOER_COLOR_ERROR='\033[48;2;237;106;101m\033[38;2;0;0;0m'
 }
 
 #CIDOER_TPUT_COLORS=()

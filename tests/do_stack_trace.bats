@@ -1,7 +1,7 @@
 #!/usr/bin/env bats
 # shellcheck disable=SC2317
 
-load ../cidoer.core.sh
+load ../cidoer.print.sh
 
 setup() {
   ORIGINAL_PATH="$PATH"
