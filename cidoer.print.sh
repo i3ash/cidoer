@@ -57,7 +57,9 @@ define_cidoer_print() {
       do_tint bold "${CIDOER_COLOR_CYAN:-cyan}" "=${line} $(do_time_now)"
       return 0
     }
-    local -r title=$(do_trim "${*}")
+    local var="${*}"
+    var="${var#"${var%%[![:space:]]*}"}"
+    local -r title="${var%"${var##*[![:space:]]}"}"
     [ -n "${title}" ] && do_tint bold "${CIDOER_COLOR_CYAN:-cyan}" "${title} ${line:${#title}} $(do_time_now)"
   }
   do_print_debug() {
