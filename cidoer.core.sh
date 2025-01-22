@@ -4,13 +4,6 @@ declare -F 'define_cidoer_core' >/dev/null && return 0
 set -eu -o pipefail
 
 define_core_utils() {
-  declare -F 'do_workflow_job' >/dev/null && return 0
-  if [ "${BASH_VERSINFO:-0}" -lt 3 ] || [ "${BASH_VERSINFO[0]:-0}" -lt 3 ] || {
-    [ "${BASH_VERSINFO[0]}" -eq 3 ] && [ "${BASH_VERSINFO[1]}" -lt 2 ]
-  }; then
-    printf 'Error: This script requires Bash 3.2 or newer.' >&2
-    exit 32
-  fi
   define_cidoer_print
   define_cidoer_core
   define_cidoer_lock
@@ -21,7 +14,7 @@ define_core_utils() {
 }
 
 define_cidoer_core() {
-  do_nothing() { :; }
+  declare -F 'do_workflow_job' >/dev/null && return 0
   do_workflow_job() {
     declare -F 'do_stack_trace' >/dev/null || do_print_fix
     local -r job_type=$(do_trim "${1:-}")
@@ -788,4 +781,13 @@ declare CIDOER_COLOR_CYAN
 declare CIDOER_COLOR_WHITE
 declare CIDOER_COLOR_ERROR
 
+do_check_bash_3_2() {
+  [ -z "$BASH_VERSION" ] && return 1
+  ((BASH_VERSINFO[0] < 3 || (BASH_VERSINFO[0] == 3 && BASH_VERSINFO[1] < 2))) && return 1
+  return 0
+}
+do_check_bash_3_2 || {
+  printf 'Error: This script requires Bash 3.2 or newer.\n' >&2
+  exit 32
+}
 define_core_utils
