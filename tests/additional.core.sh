@@ -19,8 +19,9 @@ customise_color_scheme() {
 }
 
 #CIDOER_TPUT_COLORS=()
+#unset CIDOER_TPUT_COLORS
 
-[ "${CIDOER_NO_COLOR:-no}" != 'yes' ] && [ ${#CIDOER_TPUT_COLORS[@]} -gt 0 ] && {
+do_print_with_color && {
   customise_color_scheme
   for line in "${CIDOER_TPUT_COLORS[@]}"; do
     printf "${line#*=}+++ ${line%%=*} +++$(do_lookup_color reset)%s\n"

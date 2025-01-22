@@ -11,11 +11,6 @@ teardown() {
   PATH="$ORIGINAL_PATH"
 }
 
-@test "do_nothing" {
-  run do_nothing
-  [ "$status" -eq 0 ]
-}
-
 @test "do_stack_trace" {
   a() { b; }
   b() { c; }

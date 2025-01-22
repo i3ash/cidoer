@@ -190,6 +190,12 @@ define_cidoer_print() {
     else printf '%s -->\n' "${USER:-$(id -un)}@${HOSTNAME:-$(hostname)}"; fi
     return $status
   }
+  do_print_with_color() {
+    [ -z "${CIDOER_TPUT_COLORS+x}" ] && return 1
+    [ "${#CIDOER_TPUT_COLORS[@]}" -le 0 ] && return 1
+    [ "${CIDOER_NO_COLOR:-no}" = 'yes' ] && return 1
+    return 0
+  }
   do_print_trace() { do_tint "${CIDOER_COLOR_BLUE:-blue}" "${@}"; }
   do_print_info() { do_tint "${CIDOER_COLOR_CYAN:-cyan}" "${@}"; }
   do_print_warn() { do_tint "${CIDOER_COLOR_YELLOW:-yellow}" "${@}"; }
@@ -234,7 +240,7 @@ define_cidoer_print() {
   }
   do_print_code_bash_fn() { do_print_code_bash "$(declare -f "$@")"; }
   do_print_code_bash() {
-    [ ${#CIDOER_TPUT_COLORS[@]} -gt 0 ] && command -v bat >/dev/null 2>&1 && {
+    do_print_with_color && command -v bat >/dev/null 2>&1 && {
       do_print_code_lines 'bash' "$@"
       return 0
     }
@@ -246,9 +252,7 @@ define_cidoer_print() {
     local -r magenta="${CIDOER_COLOR_MAGENTA:-magenta}"
     [ "$#" -gt 1 ] && local -r lang="$1"
     do_tint "$magenta" '#---|--------------------' "${stack}"
-    if [ "${CIDOER_NO_COLOR:-no}" != 'yes' ] &&
-      [ ${#CIDOER_TPUT_COLORS[@]} -gt 0 ] &&
-      command -v bat >/dev/null 2>&1 &&
+    if do_print_with_color && command -v bat >/dev/null 2>&1 &&
       bat --list-languages | sed 's/[:,]/ /g' | grep -q " ${lang:-}"; then
       bat --language "${lang:-}" --paging never --number <<<"${*:2}" 2>/dev/null && {
         do_tint "$magenta" '#---|--------------------' "${stack}" "${lang:-}"
@@ -296,6 +300,7 @@ define_cidoer_print() {
   }
   declare -x _CIDOER_TPUT_COLORS_CLEAR
   do_lookup_color() {
+    [ -z "${CIDOER_TPUT_COLORS+x}" ] && return 0
     [ "${#CIDOER_TPUT_COLORS[@]}" -eq 0 ] && return 0
     [ "$#" -le 0 ] || [ -z "$1" ] && {
       printf $'do_lookup_color $1 (color) is required\n' >&2
@@ -535,7 +540,7 @@ define_cidoer_file() {
     do_print_trace "$(do_stack_trace)" "<$file1>" "<$file2>"
     [ ! -f "$file1" ] && file1='/dev/null'
     [ ! -f "$file2" ] && file2='/dev/null'
-    [ "${CIDOER_NO_COLOR:-no}" != 'yes' ] && [ "${#CIDOER_TPUT_COLORS[@]}" -gt 0 ] && {
+    do_print_with_color && {
       local -r color_r="${CIDOER_COLOR_RED:-$(do_lookup_color red)}"
       local -r color_g="${CIDOER_COLOR_GREEN:-$(do_lookup_color green)}"
       local -r reset="${CIDOER_COLOR_RESET:-$(do_lookup_color reset)}"
