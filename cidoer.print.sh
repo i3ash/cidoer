@@ -19,6 +19,12 @@ define_cidoer_print() {
     else printf '%s -->\n' "${USER:-$(id -un 2>/dev/null)}@${HOSTNAME:-$(hostname 2>/dev/null)}"; fi
     return $status
   }
+  do_reverse() {
+    local -a array=("$@") reversed=()
+    local -i i
+    for ((i = ${#array[@]} - 1; i >= 0; i--)); do reversed+=("${array[$i]}"); done
+    printf '%s' "${reversed[*]}"
+  }
   do_print_with_color() {
     [ -z "${CIDOER_TPUT_COLORS+x}" ] && return 1
     [ "${#CIDOER_TPUT_COLORS[@]}" -le 0 ] && return 1
@@ -248,6 +254,5 @@ declare CIDOER_COLOR_ERROR
 declare -a CIDOER_TPUT_COLORS=()
 declare CIDOER_BAT_AVAILABLE
 
-# id hostname date printenv tput grep sed bat
 define_cidoer_print
-do_check_bats_core || do_print_dash_pair 'CIDOER_BASH_SOURCE_PRINT' "${BASH_SOURCE[*]}"
+do_check_bats_core || do_print_trace "$(do_reverse "${BASH_SOURCE[@]}")"

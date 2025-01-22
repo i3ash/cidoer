@@ -62,6 +62,12 @@ define_cidoer_core() {
     var="${var%"${var##*[![:space:]]}"}"
     printf '%s' "$var"
   }
+  do_reverse() {
+    local -a array=("$@") reversed=()
+    local -i i
+    for ((i = ${#array[@]} - 1; i >= 0; i--)); do reversed+=("${array[$i]}"); done
+    printf '%s' "${reversed[*]}"
+  }
   do_print_variable() {
     [ "$#" -le 0 ] && return 0
     local -r prefix="${1:-}" name="${2:-}" suffix="${3:-}"
@@ -569,7 +575,7 @@ do_check_bash_3_2 || {
   printf 'Error: This script requires Bash 3.2 or newer.\n' >&2
   exit 32
 }
-do_check_bats_core || do_print_dash_pair 'CIDOER_BASH_SOURCE_CORE' "${BASH_SOURCE[*]}"
+do_check_bats_core || do_print_trace "$(do_reverse "${BASH_SOURCE[@]}")"
 define_cidoer_lock
 define_cidoer_file
 define_cidoer_git
