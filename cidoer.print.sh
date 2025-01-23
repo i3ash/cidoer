@@ -5,7 +5,6 @@ set -eu -o pipefail
 
 define_cidoer_print() {
   declare -F '_print_defined' >/dev/null && return 0
-  _print_defined() { :; }
   do_stack_trace() {
     # shellcheck disable=SC2319
     local -ir status=$?
@@ -15,26 +14,23 @@ define_cidoer_print() {
       [ 'do_func_invoke' != "${FUNCNAME[$idx]}" ] && filtered_fns+=("${FUNCNAME[$idx]}")
     done
     if [ ${#filtered_fns[@]} -gt 0 ]; then
-      printf '%s --> %s\n' "${USER:-$(id -un 2>/dev/null)}@${HOSTNAME:-$(hostname 2>/dev/null)}" "${filtered_fns[*]}"
-    else printf '%s -->\n' "${USER:-$(id -un 2>/dev/null)}@${HOSTNAME:-$(hostname 2>/dev/null)}"; fi
+      printf '%s %s ->\n' "${USER:-$(id -un 2>/dev/null)}@${HOSTNAME:-$(hostname 2>/dev/null)}" "${filtered_fns[*]}"
+    else printf '%s ->\n' "${USER:-$(id -un 2>/dev/null)}@${HOSTNAME:-$(hostname 2>/dev/null)}"; fi
     return $status
   }
+  do_time_now() { command -v date >/dev/null 2>&1 && printf '%s\n' "$(date +"%Y-%m-%d %T %Z")"; }
   do_reverse() {
     local -a array=("$@") reversed=()
     local -i i
     for ((i = ${#array[@]} - 1; i >= 0; i--)); do reversed+=("${array[$i]}"); done
-    printf '%s' "${reversed[*]}"
+    printf '%s\n' "${reversed[*]}"
   }
   do_print_with_color() {
+    [ "${CIDOER_NO_COLOR:-no}" = 'yes' ] && return 1
     [ -z "${CIDOER_TPUT_COLORS+x}" ] && return 1
     [ "${#CIDOER_TPUT_COLORS[@]}" -le 0 ] && return 1
-    [ "${CIDOER_NO_COLOR:-no}" = 'yes' ] && return 1
     return 0
   }
-  do_print_trace() { do_tint "${CIDOER_COLOR_BLUE:-blue}" "${@}"; }
-  do_print_info() { do_tint "${CIDOER_COLOR_CYAN:-cyan}" "${@}"; }
-  do_print_warn() { do_tint "${CIDOER_COLOR_YELLOW:-yellow}" "${@}"; }
-  do_print_error() { do_tint "${CIDOER_COLOR_ERROR:-red}" bold "${@}"; }
   do_print_os_env() {
     command -v printenv >/dev/null 2>&1 || return 127
     local key value
@@ -42,6 +38,10 @@ define_cidoer_print() {
       do_print_dash_pair "$key" "$value"
     done < <(printenv)
   }
+  do_print_trace() { do_tint "${CIDOER_COLOR_BLUE:-blue}" "${@}"; }
+  do_print_info() { do_tint "${CIDOER_COLOR_CYAN:-cyan}" "${@}"; }
+  do_print_warn() { do_tint "${CIDOER_COLOR_YELLOW:-yellow}" "${@}"; }
+  do_print_error() { do_tint "${CIDOER_COLOR_ERROR:-red}" bold "${@}"; }
   do_print_dash_pair() {
     local -r dashes='------------------------------------'
     local -r green="${CIDOER_COLOR_GREEN:-green}"
@@ -56,15 +56,13 @@ define_cidoer_print() {
     }
     do_tint "$white" "$dashes$dashes"
   }
-  do_time_now() { command -v date >/dev/null 2>&1 && printf '%s\n' "$(date +"%Y-%m-%d %T %Z")"; }
   do_print_section() {
     local -r line='==============================================================================='
-    [ ${#} -le 0 ] && {
-      do_tint bold "${CIDOER_COLOR_CYAN:-cyan}" "=${line} $(do_time_now)"
+    [ $# -le 0 ] && {
+      do_tint bold "${CIDOER_COLOR_CYAN:-cyan}" "=$line $(do_time_now)"
       return 0
     }
-    local var="${*}"
-    var="${var#"${var%%[![:space:]]*}"}"
+    local var="${*}" && var="${var#"${var%%[![:space:]]*}"}"
     local -r title="${var%"${var##*[![:space:]]}"}"
     [ -n "${title}" ] && do_tint bold "${CIDOER_COLOR_CYAN:-cyan}" "${title} ${line:${#title}} $(do_time_now)"
   }
@@ -78,7 +76,7 @@ define_cidoer_print() {
   }
   do_print_code_bash_fn() { do_print_code_bash "$(declare -f "$@")"; }
   do_print_code_bash() {
-    do_print_with_color && do_check_bat_available && {
+    do_print_with_color && _check_bat_available && {
       do_print_code_lines 'bash' "$@"
       return 0
     }
@@ -90,7 +88,7 @@ define_cidoer_print() {
     local -r magenta="${CIDOER_COLOR_MAGENTA:-magenta}"
     [ "$#" -gt 1 ] && local -r lang="$1"
     do_tint "$magenta" '#---|--------------------' "${stack}"
-    if do_print_with_color && do_check_bat_available &&
+    if do_print_with_color && _check_bat_available &&
       bat --list-languages | sed 's/[:,]/ /g' | grep -q " ${lang:-}"; then
       bat --language "${lang:-}" --paging never --number <<<"${*:2}" 2>/dev/null && {
         do_tint "$magenta" '#---|--------------------' "${stack}" "${lang:-}"
@@ -221,12 +219,8 @@ define_cidoer_print() {
     fi
   }
   do_reset_tput
-  do_check_bats_core() {
-    [[ -n "${BATS_TEST_NUMBER:-}" ]] && return 0
-    [[ -n "${BATS_TEST_NAME:-}" ]] && return 0
-    return 1
-  }
-  do_check_bat_available() {
+  _print_defined() { :; }
+  _check_bat_available() {
     [ -n "${CIDOER_BAT_AVAILABLE:-}" ] && {
       [ "${CIDOER_BAT_AVAILABLE:-}" = 'yes' ] && return 0
       return 1
@@ -238,8 +232,14 @@ define_cidoer_print() {
     done
     CIDOER_BAT_AVAILABLE='yes'
   }
+  _check_bats_core() {
+    [[ -n "${BATS_TEST_NUMBER:-}" ]] && return 0
+    [[ -n "${BATS_TEST_NAME:-}" ]] && return 0
+    return 1
+  }
 }
 
+declare CIDOER_DEBUG
 declare CIDOER_COLOR_BLACK
 declare CIDOER_COLOR_RED
 declare CIDOER_COLOR_GREEN
@@ -255,4 +255,4 @@ declare -a CIDOER_TPUT_COLORS=()
 declare CIDOER_BAT_AVAILABLE
 
 define_cidoer_print
-do_check_bats_core || do_print_trace "$(do_reverse "${BASH_SOURCE[@]}")"
+_check_bats_core || do_print_trace "$(do_reverse "${BASH_SOURCE[@]}")"

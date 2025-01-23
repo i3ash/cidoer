@@ -20,5 +20,5 @@ teardown() {
   }
   run a
   [[ "$status" == 0 ]]
-  [[ "${lines[0]}" == "$(whoami)@$(hostname) --> "*"a b c" ]]
+  [[ "${lines[0]}" == "$(whoami)@$(hostname)"*"a b c"* ]]
 }

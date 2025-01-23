@@ -55,6 +55,13 @@ jobs:
           do_workflow_job build
           do_workflow_job upload
 
+      - name: Run Additional Test Print (Since 1.0)
+        working-directory: ${{ github.workspace }}/tests
+        shell: bash
+        env:
+          HELLO: ${{ env.HELLO }}
+        run: bash additional.print.sh
+
       - name: Run Additional Test Core (Since 1.0)
         working-directory: ${{ github.workspace }}/tests
         shell: bash

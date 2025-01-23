@@ -6,4 +6,5 @@ run_bash_file() {
   /usr/bin/env bash "$script" || printf 'bash %q returned %d\n' "$script" "$?"
 }
 
+run_bash_file additional.print.sh
 run_bash_file additional.core.sh
