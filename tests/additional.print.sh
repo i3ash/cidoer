@@ -38,6 +38,7 @@ do_print_with_color && {
 }
 
 do_print_dash_pair
+do_print_dash_pair 'HELLO' "${HELLO:-}"
 do_print_dash_pair 'do_time_now' "$(do_time_now)"
 do_print_dash_pair 'do_reverse' "$(do_reverse 5 4 3 2 1)"
 do_print_dash_pair 'do_stack_trace' "$(
@@ -47,15 +48,9 @@ do_print_dash_pair 'do_stack_trace' "$(
   a
 )"
 #do_print_os_env
-
-do_print_dash_pair 'HELLO' "${HELLO:-}"
 do_print_dash_pair 'do_print_with_color' "$(
   do_print_with_color
-  echo $?
-)"
-do_print_dash_pair 'do_check_bat_available' "$(
-  _check_bat_available
-  echo $?
+  printf '%d\n' $?
 )"
 
 CIDOER_DEBUG='yes'

@@ -5,13 +5,13 @@ set -eu -o pipefail
 
 define_cidoer_core() {
   declare -F 'do_workflow_job' >/dev/null && return 0
+  declare -F 'do_stack_trace' >/dev/null || { declare -F 'define_cidoer_print' >/dev/null && define_cidoer_print; }
   CIDOER_DEBUG='no'
   CIDOER_CORE_FILE="${BASH_SOURCE[0]}"
   CIDOER_DIR="${CIDOER_DIR:-$(dirname "$CIDOER_CORE_FILE")}"
   CIDOER_OS_TYPE=''
   CIDOER_HOST_TYPE=''
   do_workflow_job() {
-    declare -F 'do_stack_trace' >/dev/null || do_print_fix
     local -r job_type=$(do_trim "${1:-}")
     [[ "${job_type:-}" =~ ^[a-zA-Z_][a-zA-Z0-9_]*$ ]] || {
       do_print_warn "$(do_stack_trace)" $'$1 (job_type) is invalid:' "'${1:-}'" >&2
@@ -237,7 +237,8 @@ define_cidoer_core() {
 }
 
 define_cidoer_lock() {
-  declare -F "do_lock_acquire" >/dev/null && return 0
+  declare -F "do_lock_release" >/dev/null && return 0
+  declare -F 'do_workflow_job' >/dev/null || { declare -F 'define_cidoer_core' >/dev/null && define_cidoer_core; }
   CIDOER_LOCK_NAMES=()
   CIDOER_LOCK_FDS=()
   [ -z "${CIDOER_LOCK_BASE_DIR:-}" ] && {
@@ -372,6 +373,7 @@ define_cidoer_lock() {
 
 define_cidoer_file() {
   declare -F "do_file_diff" >/dev/null && return 0
+  declare -F 'do_stack_trace' >/dev/null || { declare -F 'define_cidoer_print' >/dev/null && define_cidoer_print; }
   do_file_diff() {
     command -v diff >/dev/null 2>&1 || {
       do_print_error "Command diff is not available."
@@ -521,6 +523,7 @@ define_cidoer_file() {
 
 define_cidoer_git() {
   declare -F "do_git_version_tag" >/dev/null && return 0
+  declare -F 'do_stack_trace' >/dev/null || { declare -F 'define_cidoer_print' >/dev/null && define_cidoer_print; }
   do_git_version_tag() {
     local -r exact=$(git tag --points-at HEAD 2>/dev/null | grep -E '^[Vv]?[0-9]+' | sort -V | tail -n1)
     [ -n "$exact" ] && printf '%s' "$exact" && return 0
@@ -541,6 +544,7 @@ define_cidoer_git() {
 
 define_cidoer_http() {
   declare -F "do_http_fetch" >/dev/null && return 0
+  declare -F 'do_stack_trace' >/dev/null || { declare -F 'define_cidoer_print' >/dev/null && define_cidoer_print; }
   do_http_fetch() {
     local address="${1:?Usage: do_http_fetch <URL> [output]}"
     local output="${2:-}"
@@ -569,7 +573,7 @@ define_cidoer_http() {
 }
 
 declare -F 'define_cidoer_print' >/dev/null || {
-  CIDOER_DIR="${CIDOER_DIR:=$(dirname "${BASH_SOURCE[0]}")}"
+  CIDOER_DIR="${CIDOER_DIR:-$(dirname "${BASH_SOURCE[0]}")}"
   [ -f "$CIDOER_DIR"/cidoer.print.sh ] && . "$CIDOER_DIR"/cidoer.print.sh
 }
 define_cidoer_core
