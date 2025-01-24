@@ -5,6 +5,11 @@ set -eu -o pipefail
 
 define_cidoer_core() {
   declare -F 'do_workflow_job' >/dev/null && return 0
+  CIDOER_DEBUG='no'
+  CIDOER_CORE_FILE="${BASH_SOURCE[0]}"
+  CIDOER_DIR="${CIDOER_DIR:-$(dirname "$CIDOER_CORE_FILE")}"
+  CIDOER_OS_TYPE=''
+  CIDOER_HOST_TYPE=''
   do_workflow_job() {
     declare -F 'do_stack_trace' >/dev/null || do_print_fix
     local -r job_type=$(do_trim "${1:-}")
@@ -233,6 +238,8 @@ define_cidoer_core() {
 
 define_cidoer_lock() {
   declare -F "do_lock_acquire" >/dev/null && return 0
+  CIDOER_LOCK_NAMES=()
+  CIDOER_LOCK_FDS=()
   [ -z "${CIDOER_LOCK_BASE_DIR:-}" ] && {
     CIDOER_LOCK_BASE_DIR="/cidoer/locks"
     mkdir -p "/tmp${CIDOER_LOCK_BASE_DIR}" || {
@@ -561,15 +568,10 @@ define_cidoer_http() {
   }
 }
 
-declare CIDOER_DEBUG
-declare CIDOER_OS_TYPE
-declare CIDOER_HOST_TYPE
-
-declare CIDOER_LOCK_BASE_DIR
-declare CIDOER_LOCK_METHOD
-declare -a CIDOER_LOCK_NAMES=()
-declare -a CIDOER_LOCK_FDS=()
-
+declare -F 'define_cidoer_print' >/dev/null || {
+  CIDOER_DIR="${CIDOER_DIR:=$(dirname "${BASH_SOURCE[0]}")}"
+  [ -f "$CIDOER_DIR"/cidoer.print.sh ] && . "$CIDOER_DIR"/cidoer.print.sh
+}
 define_cidoer_core
 do_check_bash_3_2 || {
   printf 'Error: This script requires Bash 3.2 or newer.\n' >&2

@@ -5,6 +5,9 @@ set -eu -o pipefail
 
 define_cidoer_print() {
   declare -F '_print_defined' >/dev/null && return 0
+  CIDOER_DEBUG='no'
+  CIDOER_BAT_AVAILABLE=''
+  CIDOER_TPUT_COLORS=()
   do_stack_trace() {
     # shellcheck disable=SC2319
     local -ir status=$?
@@ -225,10 +228,9 @@ define_cidoer_print() {
       [ "${CIDOER_BAT_AVAILABLE:-}" = 'yes' ] && return 0
       return 1
     }
+    local cmd
     for cmd in bat grep sed; do
-      command -v "$cmd" >/dev/null 2>&1 || {
-        CIDOER_BAT_AVAILABLE='no' && return 1
-      }
+      command -v "$cmd" >/dev/null 2>&1 || { CIDOER_BAT_AVAILABLE='no' && return 1; }
     done
     CIDOER_BAT_AVAILABLE='yes'
   }
@@ -238,21 +240,6 @@ define_cidoer_print() {
     return 1
   }
 }
-
-declare CIDOER_DEBUG
-declare CIDOER_COLOR_BLACK
-declare CIDOER_COLOR_RED
-declare CIDOER_COLOR_GREEN
-declare CIDOER_COLOR_YELLOW
-declare CIDOER_COLOR_BLUE
-declare CIDOER_COLOR_MAGENTA
-declare CIDOER_COLOR_CYAN
-declare CIDOER_COLOR_WHITE
-declare CIDOER_COLOR_RESET
-declare CIDOER_NO_COLOR
-declare CIDOER_COLOR_ERROR
-declare -a CIDOER_TPUT_COLORS=()
-declare CIDOER_BAT_AVAILABLE
 
 define_cidoer_print
 _check_bats_core || do_print_trace "$(do_reverse "${BASH_SOURCE[@]}")"

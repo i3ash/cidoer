@@ -2,7 +2,6 @@
 # shellcheck disable=SC2317
 set -eu -o pipefail
 
-source ../cidoer.print.sh
 source ../cidoer.core.sh
 
 do_core_check_dependencies() {
