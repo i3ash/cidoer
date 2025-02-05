@@ -69,6 +69,11 @@ jobs:
           HELLO: ${{ env.HELLO }}
         run: bash additional.core.sh
 
+      - name: Run Additional Test JFF (Since 1.1)
+        working-directory: ${{ github.workspace }}/tests
+        shell: bash
+        run: bash additional.jff.sh
+
       - name: Setup Bats and Bats Libs
         if: startsWith(runner.os, 'Linux')
         id: setup-bats

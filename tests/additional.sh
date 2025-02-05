@@ -8,3 +8,4 @@ run_bash_file() {
 
 run_bash_file additional.print.sh
 run_bash_file additional.core.sh
+run_bash_file additional.jff.sh
