@@ -74,6 +74,18 @@ jobs:
         shell: bash
         run: bash additional.jff.sh
 
+      - name: Run Additional Test SSH (Since 1.1)
+        working-directory: ${{ github.workspace }}/tests
+        shell: bash
+        env:
+          KEY_01: ${{ secrets.KEY_01 }}
+          KEY_01_PASSPHRASE: ${{ secrets.KEY_01_PASSPHRASE }}
+          SSH_KEY_02_PASSPHRASE: ${{ secrets.SSH_KEY_02_PASSPHRASE }}
+          SSH_USER_01: ${{ vars.SSH_USER_01 }}
+          SSH_HOST_01: ${{ secrets.SSH_HOST_01 }}
+          SSH_HOST_02: ${{ secrets.SSH_HOST_02 }}
+        run: bash additional.ssh.sh
+
       - name: Setup Bats and Bats Libs
         if: startsWith(runner.os, 'Linux')
         id: setup-bats
