@@ -7,8 +7,6 @@ define_cidoer_core() {
   declare -F 'do_workflow_job' >/dev/null && return 0
   declare -F 'do_stack_trace' >/dev/null || { declare -F 'define_cidoer_print' >/dev/null && define_cidoer_print; }
   CIDOER_DEBUG='no'
-  CIDOER_CORE_FILE="${BASH_SOURCE[0]}"
-  CIDOER_DIR="${CIDOER_DIR:-$(dirname "$CIDOER_CORE_FILE")}"
   CIDOER_OS_TYPE=''
   CIDOER_HOST_TYPE=''
   do_workflow_job() {
@@ -27,8 +25,8 @@ define_cidoer_core() {
       }
       steps+=("$step")
     done
-    [ ${#steps[@]} -le 0 ] && steps+=('do')
-    local -r lower=$(printf '%s' "$job_type" | tr '[:upper:]' '[:lower:]')
+    [ ${#steps[@]} -le 0 ] && steps=('do')
+    local -r lower=$(do_convert_to_lower "$job_type")
     for step in "${steps[@]}"; do
       declare -F "${lower}_${step}" >/dev/null && local -r defined=1 && break
     done
@@ -72,6 +70,16 @@ define_cidoer_core() {
     local -i i
     for ((i = ${#array[@]} - 1; i >= 0; i--)); do reversed+=("${array[$i]}"); done
     printf '%s' "${reversed[*]}"
+  }
+  do_convert_to_lower() {
+    local input="${1:-}"
+    do_check_bash_4 && printf '%s\n' "${input,,}" && return 0
+    printf '%s\n' "$input" | sed 'y/ABCDEFGHIJKLMNOPQRSTUVWXYZ/abcdefghijklmnopqrstuvwxyz/'
+  }
+  do_convert_to_upper() {
+    local input="${1:-}"
+    do_check_bash_4 && printf '%s\n' "${input^^}" && return 0
+    printf '%s\n' "$input" | sed 'y/abcdefghijklmnopqrstuvwxyz/ABCDEFGHIJKLMNOPQRSTUVWXYZ/'
   }
   do_print_variable() {
     [ "$#" -le 0 ] && return 0
@@ -119,7 +127,7 @@ define_cidoer_core() {
     if [ -z "${OSTYPE:-}" ]; then
       command -v uname >/dev/null 2>&1 && local -r os="$(uname -s)"
     else local -r os="${OSTYPE:-}"; fi
-    local -r type="$(printf '%s' "$os" | tr '[:upper:]' '[:lower:]')"
+    local -r type=$(do_convert_to_lower "$os")
     case "${type:-}" in
     linux*) CIDOER_OS_TYPE='linux' ;;
     darwin*) CIDOER_OS_TYPE='darwin' ;;
@@ -136,7 +144,7 @@ define_cidoer_core() {
     if [ -z "${HOSTTYPE:-}" ]; then
       command -v uname >/dev/null 2>&1 && local -r host="$(uname -m)"
     else local -r host="${HOSTTYPE:-}"; fi
-    local -r type="$(printf '%s' "$host" | tr '[:upper:]' '[:lower:]')"
+    local -r type=$(do_convert_to_lower "$host")
     case "$type" in
     x86_64 | amd64 | x64) CIDOER_HOST_TYPE='x86_64' ;;
     i*86 | x86) CIDOER_HOST_TYPE='x86' ;;
@@ -188,8 +196,14 @@ define_cidoer_core() {
     fi
   }
   do_check_bash_3_2() {
-    [ -z "$BASH_VERSION" ] && return 1
-    ((BASH_VERSINFO[0] < 3 || (BASH_VERSINFO[0] == 3 && BASH_VERSINFO[1] < 2))) && return 1
+    [ -z "${BASH_VERSION:-}" ] && return 1
+    [ "${BASH_VERSINFO[0]}" -lt 3 ] && return 1
+    [ "${BASH_VERSINFO[0]}" -eq 3 ] && [ "${BASH_VERSINFO[1]}" -lt 2 ] && return 1
+    return 0
+  }
+  do_check_bash_4() {
+    [ -z "${BASH_VERSION:-}" ] && return 1
+    [ "${BASH_VERSINFO[0]}" -lt 4 ] && return 1
     return 0
   }
   do_check_bats_core() {
@@ -572,8 +586,9 @@ define_cidoer_http() {
   }
 }
 
+export CIDOER_DIR="${CIDOER_DIR:-$(dirname "${BASH_SOURCE[0]}")}"
+export CIDOER_CORE_FILE="${CIDOER_CORE_FILE:-"$CIDOER_DIR/cidoer.core.sh"}"
 declare -F 'define_cidoer_print' >/dev/null || {
-  CIDOER_DIR="${CIDOER_DIR:-$(dirname "${BASH_SOURCE[0]}")}"
   [ -f "$CIDOER_DIR"/cidoer.print.sh ] && . "$CIDOER_DIR"/cidoer.print.sh
 }
 define_cidoer_core

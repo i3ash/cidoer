@@ -62,6 +62,10 @@ do_print_section Ending
 
 final_cleanup_done() {
   printf '%s\n' "$(bash --version)"
+  do_check_bash_3_2 && {
+    do_print_dash_pair 'BASH_VERSION' "${BASH_VERSION:-}"
+    do_print_dash_pair 'BASH_VERSINFO' "${BASH_VERSINFO[*]}"
+  }
   do_print_trace "$(do_stack_trace)" "${@}"
 }
 do_trap_append "final_cleanup_done $(do_host_type) $(do_os_type)" EXIT
