@@ -5,7 +5,7 @@ set -eu -o pipefail
 source ../cidoer.core.sh
 
 do_core_check_dependencies() {
-  do_check_optional_cmd tput bat git curl wget flock lockf
+  do_check_optional_cmd tput bat git curl wget flock lockf realpath readlink
   do_check_required_cmd printenv sed awk diff || return $?
 }
 do_print_section
@@ -65,6 +65,9 @@ final_cleanup_done() {
   do_check_bash_3_2 && {
     do_print_dash_pair 'BASH_VERSION' "${BASH_VERSION:-}"
     do_print_dash_pair 'BASH_VERSINFO' "${BASH_VERSINFO[*]}"
+    do_print_dash_pair 'CIDOER_CORE_FILE' "${CIDOER_CORE_FILE:-}"
+    do_print_dash_pair 'realpath' "$(realpath "$(dirname "${BASH_SOURCE[0]}")")" || :
+    do_print_dash_pair 'readlink' "$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")" || :
   }
   do_print_trace "$(do_stack_trace)" "${@}"
 }

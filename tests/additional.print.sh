@@ -14,6 +14,9 @@ do_print_trace "do_print_trace"
 do_print_info "do_print_info"
 do_print_warn "do_print_warn"
 do_print_error 'do_print_error'
+
+# shellcheck disable=SC2034
+# bashsupport disable=BP2001
 customise_color_scheme() {
   CIDOER_COLOR_RESET='\033[0m'
   CIDOER_COLOR_ERROR='\033[48;2;237;106;101m\033[38;2;0;0;0m'
