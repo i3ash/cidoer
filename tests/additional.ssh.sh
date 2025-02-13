@@ -6,7 +6,7 @@ source ../cidoer.ssh.sh
 
 test_ssh_prepare() {
   do_ssh_check_dependencies || return $?
-  eval "$(ssh-agent -s)" || return $?
+  do_ssh_ensure_agent || return $?
   #ssh-add -D || do_print_warn 'ssh-add -D returned' "$?"
   [ -n "${KEY_01:-}" ] && do_func_invoke do_ssh_add_key "$KEY_01" KEY_01_PASSPHRASE
   do_print_trace ssh-add -l
@@ -66,7 +66,7 @@ define_jumper_do() {
   jumper_do_prepare() {
     do_print_trace "$(do_stack_trace)" "$(uname -a)"
     do_print_trace "$(do_stack_trace)" "$(id)"
-    eval "$(ssh-agent -s)" || return $?
+    do_ssh_ensure_agent || return $?
     do_ssh_add_key_file ~/.ssh/id_ecdsa SSH_KEY_02_PASSPHRASE ||
       do_print_warn "$(do_stack_trace)" 'do_ssh_add_key_file() ->' "$?"
     do_ssh_add_known_host "$SSH_HOST_02" "${SSH_PORT_02:-}" ||
@@ -85,7 +85,6 @@ define_jumper_do() {
     printf '%s %s\n' "$(do_stack_trace)" '---------- ---------- ----------'
   }
   jumper_do_finish() {
-    ssh-agent -k
     printf '%s %s\n' "$(do_stack_trace)" '---------- ---------- ----------'
     do_print_section "JUMPER WORKFLOW STEPS DONE!"
   }
@@ -125,7 +124,6 @@ test_ssh_archive_dir() {
 
 _on_exit() {
   do_print_trace "$(do_stack_trace)" 'exiting'
-  ssh-agent -k 2>/dev/null || do_print_warn "$(do_stack_trace)" 'ssh-agent -k ->' "$?"
   [ -n "${SSH_HOST_01:-}" ] && ssh-keygen -R "$SSH_HOST_01"
 }
 do_trap_append '_on_exit || :' EXIT SIGHUP SIGINT SIGQUIT SIGTERM

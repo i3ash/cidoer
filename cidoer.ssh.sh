@@ -9,7 +9,7 @@ define_cidoer_ssh() {
   export CIDOER_SSH_EXPORT_FUN=()
   export CIDOER_SSH_EXPORT_VAR=()
   do_ssh_check_dependencies() {
-    do_check_optional_cmd ssh-keygen expect shasum sha256sum realpath
+    do_check_optional_cmd ssh-keygen expect shasum sha256sum realpath ps pgrep
     do_check_required_cmd ssh ssh-agent ssh-add ssh-keyscan tar gzip || return $?
   }
   do_ssh_make_bash() {
@@ -43,6 +43,26 @@ define_cidoer_ssh() {
     { printf '%s\n' "$bash" | LC_ALL='' $ssh -- /usr/bin/env bash -s -; } || local -r status="$?"
     do_print_code_bash_debug "$(printf '%s\n#| %s -- /usr/bin/env bash -s -' "$bash" "$ssh")"
     [ "${status:-0}" -eq 0 ] || return "${status:-0}"
+  }
+  do_ssh_ensure_agent() {
+    do_check_process 'ssh-agent' && return 0
+    local -r lock_dir='lock_for_ssh_agent.d'
+    do_lock_acquire "$lock_dir"
+    do_check_process 'ssh-agent' && {
+      do_lock_release "$lock_dir"
+      return 0
+    }
+    do_print_trace $'eval "$(ssh-agent -s)"'
+    eval "$(ssh-agent -s)" || {
+      do_lock_release "$lock_dir"
+      return $?
+    }
+    _kill_ssh_agent() {
+      do_print_trace "$(do_stack_trace)" 'exiting'
+      ssh-agent -k || do_print_warn "$(do_stack_trace)" 'ssh-agent -k ->' "$?"
+    }
+    do_trap_append '_kill_ssh_agent || :' EXIT SIGHUP SIGINT SIGQUIT SIGTERM
+    do_lock_release "$lock_dir"
   }
   do_ssh_archive_dir() {
     local -rx local_path="${1:-}"
