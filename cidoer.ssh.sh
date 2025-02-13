@@ -22,10 +22,10 @@ define_cidoer_ssh() {
     done <<<"$(printf "%s\n" "${@}")"
     local var fun
     for var in "${CIDOER_SSH_EXPORT_VAR[@]}"; do
-      printf -v script '%s\n%s' "$(declare -p "$var")" "$script"
+      [ -n "$var" ] && printf -v script '%s\n%s' "$(declare -p "$var")" "$script"
     done
     for fun in "${CIDOER_SSH_EXPORT_FUN[@]}"; do
-      printf -v script '%s\n%s' "$(declare -f "$fun")" "$script"
+      [ -n "$fun" ] && printf -v script '%s\n%s' "$(declare -f "$fun")" "$script"
     done
     printf '%s\n%s\n%s\n%s\n' '#!/usr/bin/env bash' 'set -eu' 'set -o pipefail' "$script"
   }
