@@ -204,6 +204,22 @@ define_cidoer_ssh() {
     printf '%s' "${chain}"
     # Chained / Nested SSH command for multi-hop connections
   }
+  do_ssh_rm_known_host() {
+    local -r host="${1:-}"
+    local -r port="${2:-22}"
+    [ -z "$host" ] && return 1
+    local -r lock_dir='known_hosts_lock.d'
+    do_lock_acquire "$lock_dir" || {
+      do_print_warn "Failed to acquire lock on '$lock_dir'." >&2
+      return 1
+    }
+    if [ "$port" -eq 22 ]; then
+      ssh-keygen -R "$host" || :
+    else
+      ssh-keygen -R "[$host]:${port:-22}" || :
+    fi
+    do_lock_release "$lock_dir"
+  }
   do_ssh_add_known_host() {
     if ! command -v ssh-keyscan >/dev/null 2>&1; then
       do_print_warn "ssh-keyscan is not available. Please install it." >&2
