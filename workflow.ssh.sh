@@ -35,6 +35,7 @@ define_ssh() {
   ssh_process() {
     do_print_dash_pair "${FUNCNAME[0]}"
     do_ssh_export_reset
+    do_func_invoke ssh_export_do
     do_ssh_export SSH_ARCHIVE_NAME SSH_ARCHIVE_PATH SSH_PROCESS_HOME
     do_ssh_export define_cidoer_print
     do_ssh_exec "$SSH_COMMAND" define_cidoer_core "define_$SSH_ARCHIVE_NAME" _process
