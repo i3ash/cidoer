@@ -15,8 +15,8 @@ define_ssh() {
     local SSH_WORK_HOME="${ARG_SSH_WORK_HOME:-$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)}"
     SSH_ARCHIVE_GROUP="${ARG_SSH_ARCHIVE_GROUP:-${SSH_WORK_HOME##*/}}"
     SSH_ARCHIVE_DIR="${ARG_SSH_ARCHIVE_DIR-}"
-    SSH_ARCHIVE_NAME="${ARG_SSH_ARCHIVE_NAME:?}"
-    SSH_ARCHIVE_PATH="${ARG_SSH_ARCHIVE_PATH:-/tmp/${SSH_ARCHIVE_GROUP:?}/${SSH_ARCHIVE_NAME:?}.tgz}"
+    SSH_ARCHIVE_NAME="${ARG_SSH_ARCHIVE_NAME:-none}"
+    SSH_ARCHIVE_PATH="${ARG_SSH_ARCHIVE_PATH:-/tmp/${SSH_ARCHIVE_GROUP:?}/${SSH_ARCHIVE_NAME-}.tgz}"
     SSH_PROCESS_HOME="${ARG_SSH_PROCESS_HOME:-/tmp/${SSH_ARCHIVE_GROUP:?}}"
     SSH_NESTED_WORKFLOW="${ARG_SSH_NESTED_WORKFLOW:-${SSH_ARCHIVE_NAME}}"
     _prepare_ssh_key
@@ -99,7 +99,9 @@ define_ssh() {
   }
   ssh_finish() {
     do_print_dash_pair "${FUNCNAME[0]}"
-    do_ssh_exec "$SSH_COMMAND" define_cidoer_core "define_${SSH_NESTED_WORKFLOW-}" 'do_func_invoke ssh_finish_do'
+    if [ "$(type -t "define_${SSH_NESTED_WORKFLOW-}")" = 'function' ]; then
+      do_ssh_exec "$SSH_COMMAND" define_cidoer_core "define_${SSH_NESTED_WORKFLOW-}" 'do_func_invoke ssh_finish_do'
+    fi
     do_print_trace "$(do_stack_trace)" done!
   }
   _prepare_ssh_key() {
