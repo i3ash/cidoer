@@ -49,12 +49,13 @@ define_cidoer_print() {
     local -r dashes='------------------------------------'
     local -r green="${CIDOER_COLOR_GREEN:-green}"
     local -r white="${CIDOER_COLOR_WHITE:-white}"
+    local -r cyan="${CIDOER_COLOR_CYAN:-cyan}"
     [ ${#} -gt 1 ] && {
       printf "%s %s [%s]\n" "$(do_tint "$green" "$1")" "$(do_tint "$white" "${dashes:${#1}}")" "$(do_tint "$green" "$2")"
       return 0
     }
     [ ${#} -gt 0 ] && {
-      printf "%s < %s >\n" "$(do_tint "$white" "$dashes-")" "$(do_tint "$white" "$1")"
+      printf "%s%s\n" "$(do_tint "$cyan" "$dashes--")" "$(do_tint "$cyan" "[$1]")"
       return 0
     }
     do_tint "$white" "$dashes$dashes"

@@ -21,7 +21,7 @@ teardown() {
   old_path="$PATH"
   # shellcheck disable=SC2123
   PATH="./non_existent_dir"
-  run do_http_fetch "https://example.com"
+  run do_http_fetch "https://i3ash.com"
   [ "$status" -eq 2 ]
   [[ "$output" == *"Neither 'wget' nor 'curl' is installed."* ]]
   PATH="$old_path"
@@ -31,9 +31,9 @@ teardown() {
   if ! command -v wget >/dev/null 2>&1 && ! command -v curl >/dev/null 2>&1; then
     skip "Neither wget nor curl is installed, skipping test."
   fi
-  run do_http_fetch "https://example.com"
+  run do_http_fetch "https://i3ash.com"
   [ "$status" -eq 0 ]
-  [[ "$output" == *"Example Domain"* ]]
+  [[ "$output" == *"i3ash"* ]]
 }
 
 @test "do_http_fetch with valid URL and output file saves content to the file" {
@@ -42,10 +42,10 @@ teardown() {
   fi
   local out_file="${temp_dir}/test_output.html"
   rm -f "$out_file"
-  run do_http_fetch "https://example.com" "$out_file"
+  run do_http_fetch "https://i3ash.com" "$out_file"
   [ "$status" -eq 0 ]
   [ -f "$out_file" ]
-  grep "Example Domain" "$out_file"
+  grep "i3ash" "$out_file"
   rm -f "$out_file"
 }
 

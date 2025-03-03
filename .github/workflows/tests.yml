@@ -70,6 +70,7 @@ jobs:
         run: bash additional.core.sh
 
       - name: Setup Bats and Bats Libs
+        if: startsWith(runner.os, 'Linux')
         id: setup-bats
         uses: bats-core/bats-action@3.0.0
         with:
@@ -79,6 +80,7 @@ jobs:
           file-path: "${{ github.workspace }}/tests/bats-file"
 
       - name: Run Bats Tests
+        if: startsWith(runner.os, 'Linux')
         working-directory: ${{ github.workspace }}/tests
         shell: bash
         run: |

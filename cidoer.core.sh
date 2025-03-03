@@ -32,7 +32,7 @@ define_cidoer_core() {
       declare -F "${lower}_${step}" >/dev/null && local -r defined=1 && break
     done
     [ "${defined:-0}" -eq 1 ] || {
-      do_func_invoke "define_${lower}" || return $?
+      do_func_invoke "define_${lower}" "${steps[@]}" || return $?
     }
     for step in "${steps[@]}"; do
       do_func_invoke "${lower}_${step}" || return $?
@@ -52,7 +52,7 @@ define_cidoer_core() {
     "${@}" || local -r status=$?
     declare -F "$func_finally" >/dev/null && {
       [ "${status:-0}" -eq 0 ] || do_print_info "$(do_stack_trace)" "$func_name failed with exit code $status" >&2
-      "$func_finally" "$status" || local -r code=$?
+      "$func_finally" "${status:-0}" || local -r code=$?
       [ "${code:-0}" -eq 0 ] || do_print_warn "$(do_stack_trace)" "$func_finally failed with exit code $code" >&2
       return "${code:-0}"
     }
@@ -92,6 +92,15 @@ define_cidoer_core() {
     done
     local -r trimmed="${value#"${value%%[![:space:]]*}"}"
     printf '%s' "${trimmed%"${trimmed##*[![:space:]]}"}"
+  }
+  do_list_files() {
+    local -r dir="${1:-.}"
+    [ -d "$dir" ] || return 0
+    local -r path="$(realpath "$dir")"
+    do_print_trace "$(do_stack_trace)" "$path"
+    find "$path" -type l -exec ls -lhA {} +
+    find "$path" -type f -exec ls -lhA {} +
+    do_print_trace "$(do_stack_trace)" "$(date)"
   }
   do_trap_append() {
     local -r new_cmd="$1" && shift
@@ -172,7 +181,7 @@ define_cidoer_core() {
     return 1
   }
   do_check_optional_cmd() {
-    do_print_dash_pair 'Optional Commands'
+    do_print_dash_pair "${FUNCNAME[0]}"
     local cmd
     for cmd in "${@}"; do
       if ! do_check_installed "$cmd"; then
@@ -181,7 +190,7 @@ define_cidoer_core() {
     done
   }
   do_check_required_cmd() {
-    do_print_dash_pair 'Required Commands'
+    do_print_dash_pair "${FUNCNAME[0]}"
     local cmd
     local missing=0
     for cmd in "${@}"; do
@@ -209,6 +218,22 @@ define_cidoer_core() {
   do_check_bats_core() {
     [[ -n "${BATS_TEST_NUMBER:-}" ]] && return 0
     [[ -n "${BATS_TEST_NAME:-}" ]] && return 0
+    return 1
+  }
+  do_check_process() {
+    local name="${1:-}"
+    [ -z "$name" ] && return 2
+    if command -v pgrep >/dev/null 2>&1; then
+      pgrep -u "${USER:-$(id -un)}" "$name" >/dev/null && return 0
+    elif command -v ps >/dev/null 2>&1; then
+      # shellcheck disable=SC2009
+      ps aux | grep "[${name:0:1}]${name:1}" >/dev/null && return 0
+    elif [[ -d /proc ]]; then
+      local pid
+      for pid in /proc/[0-9]*; do
+        [[ -f "$pid/cmdline" && $(tr -d '\0' <"$pid/cmdline") == *"$name"* ]] && return 0
+      done
+    fi
     return 1
   }
   do_print_fix() {
