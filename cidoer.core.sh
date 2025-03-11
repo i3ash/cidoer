@@ -579,6 +579,21 @@ define_cidoer_git() {
   do_git_short_commit_hash() {
     printf '%s' "$(git rev-parse --short HEAD 2>/dev/null)"
   }
+  do_git_diff() {
+    git diff --quiet || return $?
+    git diff --cached --quiet || return $?
+    return 0
+  }
+  do_git_version_next() {
+    local -r tag=$(do_git_version_tag)
+    local count
+    count=$(do_git_count_commits_since "$tag")
+    do_git_diff || count=$((count + 1))
+    [ "$count" -gt 0 ] && local -r ver="${tag:-0}.$count"
+    local result="${ver:-${tag:-0}}"
+    [[ $result =~ ^v[0-9]+ ]] && result="${result#v}"
+    printf '%s' "$result"
+  }
 }
 
 define_cidoer_http() {
