@@ -294,7 +294,7 @@ define_cidoer_lock() {
       rm -f "$lock_path/pid" || do_print_trace "Failed to remove pid file:" "$lock_path/pid" >&2
     }
     [ -d "$lock_path" ] && {
-      rmdir "$lock_path" 2>/dev/null || do_print_trace "Failed to remove directory:" "$lock_path" >&2
+      rmdir "$lock_path" || do_print_trace "Failed to remove directory:" "$lock_path" >&2
     }
     local -i i idx=-1
     for i in "${!CIDOER_LOCK_NAMES[@]}"; do
@@ -305,7 +305,7 @@ define_cidoer_lock() {
     done
     if [ "$idx" -ge 0 ]; then
       local fd="${CIDOER_LOCK_FDS[$idx]}"
-      { [ -n "$fd" ] && eval "exec $fd>&-" 2>/dev/null; } || true
+      { [ -n "$fd" ] && eval "exec $fd>&-"; } || true
       unset "CIDOER_LOCK_NAMES[$idx]"
       unset "CIDOER_LOCK_FDS[$idx]"
     fi
@@ -322,7 +322,7 @@ define_cidoer_lock() {
       if [ -d "$lock_path" ] && [ -f "$pid_file" ]; then
         local pid
         pid=$(cat "$pid_file" 2>/dev/null)
-        if [ -n "$pid" ] && ! kill -0 "$pid" 2>/dev/null; then
+        if [ -n "$pid" ] && ! kill -0 "$pid" >/dev/null 2>&1; then
           do_lock_release "$lock_name"
         fi
       fi
@@ -341,38 +341,38 @@ define_cidoer_lock() {
     command -v flock >/dev/null 2>&1 || return 1
     local -r lock_name="${1:-}"
     local -r lock_path="/tmp${CIDOER_LOCK_BASE_DIR}/${lock_name}"
-    mkdir -p "$lock_path" 2>/dev/null || return 1
+    mkdir -p "$lock_path" || return 1
     local -r fd=$(_lock_next_fd) || return 2
-    eval "exec $fd>\"$lock_path/pid\"" 2>/dev/null || return 3
-    if flock -n "$fd" 2>/dev/null; then
+    eval "exec $fd>\"$lock_path/pid\"" || return 3
+    if flock -n "$fd"; then
       printf '%s\n' "$$" >"$lock_path/pid"
       CIDOER_LOCK_NAMES[${#CIDOER_LOCK_NAMES[@]}]="$lock_name"
       CIDOER_LOCK_FDS[${#CIDOER_LOCK_FDS[@]}]="$fd"
       return 0
     fi
-    eval "exec $fd>&- 2>/dev/null" || true
+    eval "exec $fd>&-" || true
     return 1
   }
   do_lock_try_lockf() {
     command -v lockf >/dev/null 2>&1 || return 1
     local -r lock_name="${1:-}"
     local -r lock_path="/tmp${CIDOER_LOCK_BASE_DIR}/${lock_name}"
-    mkdir -p "$lock_path" 2>/dev/null || return 1
+    mkdir -p "$lock_path" || return 1
     local -r fd=$(_lock_next_fd) || return 2
-    eval "exec $fd>\"$lock_path/pid\"" 2>/dev/null || return 3
-    if lockf -t 0 "$fd" 2>/dev/null; then
+    eval "exec $fd>\"$lock_path/pid\"" || return 3
+    if lockf -t 0 "$fd"; then
       printf '%s\n' "$$" >"$lock_path/pid"
       CIDOER_LOCK_NAMES[${#CIDOER_LOCK_NAMES[@]}]="$lock_name"
       CIDOER_LOCK_FDS[${#CIDOER_LOCK_FDS[@]}]="$fd"
       return 0
     fi
-    eval "exec $fd>&- 2>/dev/null" || true
+    eval "exec $fd>&-" || true
     return 1
   }
   do_lock_try_mkdir() {
     local -r lock_name="${1:-}"
     local -r lock_path="/tmp${CIDOER_LOCK_BASE_DIR}/${lock_name}"
-    if mkdir "$lock_path" 2>/dev/null; then
+    if mkdir "$lock_path"; then
       printf '%s\n' "$$" >"$lock_path/pid"
       CIDOER_LOCK_NAMES[${#CIDOER_LOCK_NAMES[@]}]="$lock_name"
       CIDOER_LOCK_FDS[${#CIDOER_LOCK_FDS[@]}]=''
@@ -395,7 +395,8 @@ define_cidoer_lock() {
     do_print_error "$(do_stack_trace)" "Error: No free FD found between 200 and $max_fd." >&2
     return 1
   }
-  [ -z "${CIDOER_LOCK_METHOD:-}" ] && {
+  _lock_method_confirm() {
+    [ -n "${CIDOER_LOCK_METHOD:-}" ] && return 0
     CIDOER_LOCK_METHOD="mkdir"
     local -r lock_path="/tmp${CIDOER_LOCK_BASE_DIR}/check.d"
     mkdir -p "$lock_path" || {
@@ -410,14 +411,14 @@ define_cidoer_lock() {
       do_print_warn "Failed to open lock file"
       return 1
     }
-    if command -v flock &>/dev/null; then
+    if command -v flock >/dev/null 2>&1; then
       if flock -n "$fd"; then
         CIDOER_LOCK_METHOD="flock"
         do_print_trace "Using flock locking method"
       else
         do_print_warn "Warning: flock -n unsupported, fallback to mkdir lock."
       fi
-    elif command -v lockf &>/dev/null; then
+    elif command -v lockf >/dev/null 2>&1; then
       if lockf -t 0 "$fd"; then
         CIDOER_LOCK_METHOD="lockf"
         do_print_trace "Using lockf locking method"
@@ -429,6 +430,7 @@ define_cidoer_lock() {
     fi
     eval "exec $fd>&-" || do_print_warn "Failed to close file descriptor $fd, continuing anyway"
   }
+  _lock_method_confirm
 }
 
 define_cidoer_file() {
