@@ -286,19 +286,6 @@ define_cidoer_lock() {
       [ -d "/tmp${CIDOER_LOCK_BASE_DIR}" ] || do_print_error "Failed to create lock base directory"
     }
   }
-  [ -z "${CIDOER_LOCK_METHOD:-}" ] && {
-    if command -v flock >/dev/null 2>&1; then
-      CIDOER_LOCK_METHOD="flock"
-      if ! (flock -n 333 -c "true") 2>/dev/null; then
-        do_print_info "Warning: flock -n unsupported, fallback to mkdir lock."
-        CIDOER_LOCK_METHOD="mkdir"
-      fi
-    elif command -v lockf >/dev/null 2>&1; then
-      CIDOER_LOCK_METHOD="lockf"
-    else
-      CIDOER_LOCK_METHOD="mkdir"
-    fi
-  }
   do_lock_release() {
     local -r lock_name="${1:-}"
     local -r lock_path="/tmp${CIDOER_LOCK_BASE_DIR}/${lock_name}"
@@ -397,7 +384,7 @@ define_cidoer_lock() {
     local -r max_fd=2048
     local fd="${_CIDOER_LOCK_FD_START:=200}"
     while ((fd <= max_fd)); do
-      if (true >&"$fd") 2>/dev/null; then
+      if (true >&"$fd") >/dev/null 2>&1; then
         fd=$((fd + 1))
       else
         _CIDOER_LOCK_FD_START=$((fd + 1))
@@ -407,6 +394,40 @@ define_cidoer_lock() {
     done
     do_print_error "$(do_stack_trace)" "Error: No free FD found between 200 and $max_fd." >&2
     return 1
+  }
+  [ -z "${CIDOER_LOCK_METHOD:-}" ] && {
+    CIDOER_LOCK_METHOD="mkdir"
+    local -r lock_path="/tmp${CIDOER_LOCK_BASE_DIR}/check.d"
+    mkdir -p "$lock_path" || {
+      do_print_warn "Failed to create lock directory: $lock_path"
+      return 1
+    }
+    local -r fd=$(_lock_next_fd) || {
+      do_print_warn "Failed to get next file descriptor"
+      return 1
+    }
+    eval "exec $fd>\"$lock_path/pid\"" || {
+      do_print_warn "Failed to open lock file"
+      return 1
+    }
+    if command -v flock &>/dev/null; then
+      if flock -n "$fd"; then
+        CIDOER_LOCK_METHOD="flock"
+        do_print_trace "Using flock locking method"
+      else
+        do_print_warn "Warning: flock -n unsupported, fallback to mkdir lock."
+      fi
+    elif command -v lockf &>/dev/null; then
+      if lockf -t 0 "$fd"; then
+        CIDOER_LOCK_METHOD="lockf"
+        do_print_trace "Using lockf locking method"
+      else
+        do_print_warn "Warning: lockf -t unsupported, fallback to mkdir lock."
+      fi
+    else
+      do_print_trace "Using mkdir locking method (flock and lockf not available)"
+    fi
+    eval "exec $fd>&-" || do_print_warn "Failed to close file descriptor $fd, continuing anyway"
   }
 }
 
