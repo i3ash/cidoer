@@ -617,6 +617,36 @@ define_cidoer_git() {
     [[ $result =~ ^v[0-9]+ ]] && result="${result#v}"
     printf '%s' "$result"
   }
+  do_git_semantic_version() {
+    local -r tag=$(do_git_version_tag)
+    local version="${tag:-0}"
+    if [[ $version == v* ]]; then
+      version=${version#v}
+    fi
+    local count
+    count=$(do_git_count_commits_since "$tag")
+    do_git_diff || count=$((count + 1))
+    local patch
+    if [[ $version =~ ^([0-9]+)\.([0-9]+)\.([0-9]+)$ ]]; then
+      local -r major="${BASH_REMATCH[1]}"
+      local -r minor="${BASH_REMATCH[2]}"
+      patch="${BASH_REMATCH[3]}"
+      [ "$count" -gt 0 ] && patch=$((patch + count))
+    else
+      if [[ $version =~ ^([0-9]+)\.([0-9]+)$ ]]; then
+        local -r major="${BASH_REMATCH[1]}"
+        local -r minor="${BASH_REMATCH[2]}"
+      elif [[ $version =~ ^([0-9]+)$ ]]; then
+        local -r major="${BASH_REMATCH[1]}"
+        local -r minor='0'
+      else
+        local -r major='0'
+        local -r minor='0'
+      fi
+      patch="$count"
+    fi
+    printf '%s' "${major}.${minor}.${patch}"
+  }
 }
 
 define_cidoer_http() {

@@ -38,6 +38,7 @@ do_workflow_job docker step1 step2 step3 'done'
 do_workflow_job docker step1 step2 step3 'done'
 
 do_check_required_cmd git grep sort tail && {
+  do_print_dash_pair 'do_git_semantic_version' "$(do_git_semantic_version)"
   do_print_dash_pair 'do_git_version_tag' "$(do_git_version_tag)"
   do_print_dash_pair 'do_git_count_commits_since' "$(do_git_count_commits_since "$(do_git_version_tag)")"
   do_print_dash_pair 'do_git_short_commit_hash' "$(do_git_short_commit_hash)"
