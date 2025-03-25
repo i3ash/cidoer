@@ -69,6 +69,10 @@ final_cleanup_done() {
     do_print_dash_pair 'CIDOER_CORE_FILE' "${CIDOER_CORE_FILE:-}"
     do_print_dash_pair 'realpath' "$(realpath "$(dirname "${BASH_SOURCE[0]}")")" || :
     do_print_dash_pair 'readlink' "$(readlink -f "$(dirname "${BASH_SOURCE[0]}")")" || :
+    local -r now0=$(do_time_iso8601_now)
+    local -r now1=$(do_time_iso8601_to_unix "$now0")
+    do_print_dash_pair 'now0' "${now0-}" || :
+    do_print_dash_pair 'now1' "${now1-}" || :
   }
   do_print_trace "$(do_stack_trace)" "${@}"
 }
