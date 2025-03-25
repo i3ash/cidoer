@@ -414,19 +414,15 @@ define_cidoer_lock() {
     if command -v flock >/dev/null 2>&1; then
       if flock -n "$fd"; then
         CIDOER_LOCK_METHOD="flock"
-        do_print_trace "Using flock locking method"
       else
         do_print_warn "Warning: flock -n unsupported, fallback to mkdir lock."
       fi
     elif command -v lockf >/dev/null 2>&1; then
       if lockf -t 0 "$fd"; then
         CIDOER_LOCK_METHOD="lockf"
-        do_print_trace "Using lockf locking method"
       else
         do_print_warn "Warning: lockf -t unsupported, fallback to mkdir lock."
       fi
-    else
-      do_print_trace "Using mkdir locking method (flock and lockf not available)"
     fi
     eval "exec $fd>&-" || do_print_warn "Failed to close file descriptor $fd, continuing anyway"
   }
