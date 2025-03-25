@@ -22,6 +22,19 @@ define_cidoer_print() {
     return $status
   }
   do_time_now() { command -v date >/dev/null 2>&1 && printf '%s\n' "$(date +"%Y-%m-%d %T %Z")"; }
+  do_time_iso8601_now() { command -v date >/dev/null 2>&1 && date -u +'%Y-%m-%dT%H:%M:%SZ'; }
+  do_time_iso8601_to_unix() {
+    local -r iso="${1:-1970-01-01T00:00:00Z}"
+    if ! printf '%s' "$iso" | grep -Eq '^[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}Z$'; then
+      printf "Invalid format (1970-01-01T00:00:00Z): %s\n" "$iso" >&2
+      return 1
+    fi
+    if [ "$(do_os_type)" != "darwin" ]; then
+      date -u -d "$iso" +%s
+    else
+      date -u -j -f "%Y-%m-%dT%H:%M:%SZ" "$iso" +%s
+    fi
+  }
   do_reverse() {
     local -a array=("$@") reversed=()
     local -i i
