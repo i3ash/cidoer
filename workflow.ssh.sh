@@ -52,20 +52,26 @@ define_ssh() {
     do_print_trace "$(do_stack_trace)" done!
   }
   _process() {
-    [ -n "${SSH_ARCHIVE_NAME-}" ] || return 11
-    [ -n "${SSH_ARCHIVE_PATH-}" ] || return 12
+    do_print_dash_pair 'SSH_ARCHIVE_GROUP' "${SSH_ARCHIVE_GROUP-}"
+    [ -n "${SSH_ARCHIVE_GROUP-}" ] || return 11
+    do_print_dash_pair 'SSH_ARCHIVE_NAME' "${SSH_ARCHIVE_NAME-}"
+    [ -n "${SSH_ARCHIVE_NAME-}" ] || return 12
+    do_print_dash_pair 'SSH_ARCHIVE_PATH' "${SSH_ARCHIVE_PATH-}"
+    [ -n "${SSH_ARCHIVE_PATH-}" ] || return 13
+    do_print_dash_pair 'SSH_PROCESS_HOME' "${SSH_PROCESS_HOME-}"
+    [ -n "${SSH_PROCESS_HOME-}" ] || return 14
+    [ -f "$SSH_ARCHIVE_PATH" ] || {
+      do_func_invoke ssh_process_do || return $?
+      return 0
+    }
     local -r dir="${SSH_PROCESS_HOME:-/tmp}"
     mkdir -p "$dir/${SSH_ARCHIVE_NAME-}" || return $?
     pushd "$dir" >/dev/null || return $?
     tar xzf "$SSH_ARCHIVE_PATH" || return $?
-    popd >/dev/null
+    popd >/dev/null || return $?
     pushd "$dir/${SSH_ARCHIVE_NAME-}" >/dev/null || return $?
-    do_print_dash_pair 'SSH_ARCHIVE_GROUP' "${SSH_ARCHIVE_GROUP-}"
-    do_print_dash_pair 'SSH_ARCHIVE_NAME' "${SSH_ARCHIVE_NAME-}"
-    do_print_dash_pair 'SSH_ARCHIVE_PATH' "${SSH_ARCHIVE_PATH-}"
-    do_print_dash_pair 'SSH_PROCESS_HOME' "${SSH_PROCESS_HOME-}"
-    do_func_invoke ssh_process_do
-    popd >/dev/null
+    do_func_invoke ssh_process_do || return $?
+    popd >/dev/null || return $?
   }
   ssh_prune_finally() { return 0; }
   ssh_prune() {
