@@ -64,85 +64,7 @@ define_cidoer_ssh() {
     do_trap_append '_kill_ssh_agent || :' EXIT SIGHUP SIGINT SIGQUIT SIGTERM
     do_lock_release "$lock_dir"
   }
-  do_ssh_archive_dir() {
-    local -rx local_path="${1:-}"
-    local -r ssh="${2:-}"
-    local -rx remote_path="${3:-}"
-    local param
-    for param in 'local_path' 'ssh' 'remote_path'; do
-      if [ -z "${!param}" ]; then
-        do_print_error "$(do_stack_trace)" "Error: Parameter '$param' is required" >&2
-        return 1
-      fi
-    done
-    command -v realpath >/dev/null 2>&1 && {
-      local -r resolved_path=$(realpath "$local_path" 2>/dev/null) || {
-        do_print_error "$(do_stack_trace)" "Error: Invalid path or insufficient permissions: $resolved_path" >&2
-        return 1
-      }
-    }
-    [ -d "$local_path" ] || {
-      do_print_error "$(do_stack_trace)" "Error: Not a directory: $local_path" >&2
-      return 1
-    }
-    detect_sha256_cmd() {
-      command -v sha256sum >/dev/null 2>&1 && {
-        printf 'sha256sum'
-        return 0
-      }
-      command -v shasum >/dev/null 2>&1 && {
-        printf 'shasum -a 256'
-        return 0
-      }
-      do_print_error "$(do_stack_trace)" 'Error: No suitable command for calculating SHA-256' >&2
-      return 1
-    }
-    local -r sha256_cmd="$(detect_sha256_cmd)" || return "$?"
-    do_ssh_export remote_path
-    tar --no-xattrs --version >/dev/null 2>&1 && local -r tar_cmd='tar --no-xattrs'
-    do_print_trace "$(do_stack_trace)" "<${tar_cmd:-tar} -cf - $local_path>" "<$ssh:${remote_path:-}>"
-    local -r local_hash=$(${tar_cmd:-tar} -cf - "$local_path" | gzip -n | $sha256_cmd | awk '{print $1}')
-    local -r lock_dir="archive-to${remote_path//\//-}.d"
-    do_lock_acquire "$lock_dir" || {
-      do_print_error "$(do_stack_trace)" "Failed to acquire lock on '$lock_dir'." >&2
-      return 3
-    }
-    [ -n "${resolved_path:-}" ] && do_print_dash_pair 'realpath' "$resolved_path"
-    do_print_dash_pair 'sha256sum_local' "$local_hash"
-    cat_with_ssh() {
-      local -r ssh="${1:?}"
-      local -r bash="$(do_ssh_make_bash $'cat >${remote_path:?}')"
-      LC_ALL='' $ssh "$bash" || local -r status="$?"
-      do_print_code_bash_debug "$(printf '%s\n#| %s' "$bash" "$ssh")"
-      [ "${status:-0}" -eq 0 ] || return "${status:-0}"
-    }
-    { ${tar_cmd:-tar} -cf - "$local_path" | gzip -n | cat_with_ssh "$ssh"; } || local -r status="$?"
-    do_lock_release "$lock_dir" >/dev/null
-    [ "${status:-0}" -eq 0 ] || {
-      do_print_error "$(do_stack_trace)" "Error: Transfer failed with status ${status:-0}" >&2
-      return "${status:-0}"
-    }
-    calculate_sha256() {
-      local -r file_path="${1:?}"
-      local -r output_file="${2:-${file_path}.sha256}"
-      local -r sha256="$(detect_sha256_cmd)" || return "$?"
-      local -r sha256_hash="$($sha256 "$file_path" | awk '{print $1}')"
-      printf '%s\n' "$sha256_hash" >"$output_file"
-      printf '%s\n' "$sha256_hash"
-    }
-    do_ssh_export detect_sha256_cmd calculate_sha256
-    local -r remote_hash=$(do_ssh_exec "$ssh" $'calculate_sha256 "${remote_path:?}"') || {
-      do_print_error "$(do_stack_trace)" "Error: Failed to calculate remote checksum" >&2
-      return 2
-    }
-    do_ssh_export_reset
-    do_print_dash_pair 'sha256sum_remote' "$remote_hash"
-    [ "$local_hash" = "$remote_hash" ] || {
-      do_print_error "$(do_stack_trace)" "Error: Checksum verification failed" >&2
-      return 3
-    }
-    do_print_trace "$(do_stack_trace)" "Transfer completed and verified successfully"
-  }
+
   do_ssh_export_reset() {
     CIDOER_SSH_EXPORT_FUN=()
     CIDOER_SSH_EXPORT_VAR=(CIDOER_DEBUG CIDOER_SSH_EXPORT_FUN CIDOER_SSH_EXPORT_VAR)
@@ -167,6 +89,100 @@ define_cidoer_ssh() {
         CIDOER_SSH_EXPORT_VAR+=("$name")
       fi
     done
+  }
+  do_ssh_write() {
+    local -rx remote_path="${1:-}"
+    local -r ssh="${2:-${SSH_COMMAND:?}}"
+    local param
+    for param in remote_path ssh; do
+      if [ -z "${!param}" ]; then
+        do_print_error "$(do_stack_trace)" "Error: Parameter '$param' is required" >&2
+        return 1
+      fi
+    done
+    detect_sha256_cmd() {
+      command -v sha256sum >/dev/null 2>&1 && {
+        printf 'sha256sum'
+        return 0
+      }
+      command -v shasum >/dev/null 2>&1 && {
+        printf 'shasum -a 256'
+        return 0
+      }
+      do_print_error "$(do_stack_trace)" 'Error: No suitable command for calculating SHA-256' >&2
+      return 1
+    }
+    local -r sha256_cmd="$(detect_sha256_cmd)" || return "$?"
+    do_print_trace "$(do_stack_trace)" "<$ssh:${remote_path:-}>"
+    local -r lock_dir="lock${remote_path//\//-}.d"
+    do_lock_acquire "$lock_dir" || {
+      do_print_error "$(do_stack_trace)" "Failed to acquire lock on '$lock_dir'." >&2
+      return 3
+    }
+    do_ssh_export remote_path
+    cat_with_ssh() {
+      local -r ssh="${1:?}"
+      local -r bash="$(do_ssh_make_bash $'cat >${remote_path:?}')"
+      LC_ALL='' $ssh "$bash" || local -r status="$?"
+      do_print_code_bash_debug "$(printf '%s\n#| %s' "$bash" "$ssh")"
+      [ "${status:-0}" -eq 0 ] || return "${status:-0}"
+    }
+    local -r local_path=$(mktemp)
+    { tee "$local_path" | cat_with_ssh "$ssh"; } || local -r status="$?"
+    do_lock_release "$lock_dir" >/dev/null
+    [ "${status:-0}" -eq 0 ] || {
+      do_print_error "$(do_stack_trace)" "Error: Transfer failed with status ${status:-0}" >&2
+      [ -f "$local_path" ] && rm -f "$local_path"
+      return "${status:-0}"
+    }
+    calculate_sha256() {
+      local -r file_path="${1:?}"
+      local -r output_file="${2:-${file_path}.sha256}"
+      local -r sha256="$(detect_sha256_cmd)" || return "$?"
+      local -r sha256_hash="$($sha256 "$file_path" | awk '{print $1}')"
+      printf '%s\n' "$sha256_hash" >"$output_file"
+      printf '%s\n' "$sha256_hash"
+    }
+    do_ssh_export detect_sha256_cmd calculate_sha256
+    local -r remote_hash=$(do_ssh_exec "$ssh" $'calculate_sha256 "${remote_path:?}"') || {
+      do_print_error "$(do_stack_trace)" "Error: Failed to calculate remote checksum" >&2
+      return 2
+    }
+    do_ssh_export_reset
+    local -r local_hash=$($sha256_cmd <"$local_path" | awk '{print $1}')
+    [ -f "$local_path" ] && rm -f "$local_path"
+    do_print_dash_pair 'sha256sum_local' "$local_hash"
+    do_print_dash_pair 'sha256sum_remote' "$remote_hash"
+    [ "$local_hash" = "$remote_hash" ] || {
+      do_print_error "$(do_stack_trace)" "Error: Checksum verification failed" >&2
+      return 3
+    }
+    do_print_trace "$(do_stack_trace)" "Transfer completed and verified successfully"
+  }
+  do_ssh_archive_dir() {
+    local -rx local_path="${1:-}"
+    local -r ssh="${2:-}"
+    local -rx remote_path="${3:-}"
+    local param
+    for param in 'local_path' 'ssh' 'remote_path'; do
+      if [ -z "${!param}" ]; then
+        do_print_error "$(do_stack_trace)" "Error: Parameter '$param' is required" >&2
+        return 1
+      fi
+    done
+    command -v realpath >/dev/null 2>&1 && {
+      local -r resolved_path=$(realpath "$local_path" 2>/dev/null) || {
+        do_print_error "$(do_stack_trace)" "Error: Invalid path or insufficient permissions: $resolved_path" >&2
+        return 1
+      }
+    }
+    [ -d "$local_path" ] || {
+      do_print_error "$(do_stack_trace)" "Error: Not a directory: $local_path" >&2
+      return 1
+    }
+    tar --no-xattrs --version >/dev/null 2>&1 && local -r tar_cmd='tar --no-xattrs'
+    do_print_trace "$(do_stack_trace)" "<${tar_cmd:-tar} -cf - $local_path>" "<$ssh:${remote_path:-}>"
+    { ${tar_cmd:-tar} -cf - "$local_path" | gzip -n | do_ssh_write "$remote_path" "$ssh"; } || return "$?"
   }
   do_ssh_print_chain() {
     if [ $# -lt 1 ]; then
